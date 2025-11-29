@@ -1,0 +1,147 @@
+{
+  "admin_group_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "admins"
+  },
+  "cloudfront_distribution_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "E1AFV8VGIQJ2PM"
+  },
+  "cognito_client_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "622465vqjubuav4e0r4pae2q5u"
+  },
+  "cognito_domain": {
+    "sensitive": false,
+    "type": "string",
+    "value": "honigwabe-081033004511"
+  },
+  "cognito_user_pool_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "eu-central-1_51DAT0n1j"
+  },
+  "contact_form_api_endpoint": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://q91fu5z277.execute-api.eu-central-1.amazonaws.com"
+  },
+  "event_api_endpoint": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://1rhnpplzti.execute-api.eu-central-1.amazonaws.com"
+  },
+  "event_images_info": {
+    "sensitive": false,
+    "type": "string",
+    "value": "Uses honigwabe-thumbnails-production bucket and https://d230uf53iuiz3v.cloudfront.net CDN"
+  },
+  "events_table": {
+    "sensitive": false,
+    "type": "string",
+    "value": "honigwabe-events"
+  },
+  "ivs_channel_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:ivs:eu-central-1:081033004511:channel/9q8zX0NcDW2p"
+  },
+  "ivs_chat_api_endpoint": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://52b5ai8j61.execute-api.eu-central-1.amazonaws.com"
+  },
+  "ivs_chat_room_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:ivschat:eu-central-1:081033004511:room/8LlFnw2JKAfJ"
+  },
+  "ivs_ingest_endpoint": {
+    "sensitive": false,
+    "type": "string",
+    "value": "53e6ac09334d.global-contribute.live-video.net"
+  },
+  "ivs_playback_url": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://53e6ac09334d.eu-central-1.playback.live-video.net/api/video/v1/eu-central-1.081033004511.channel.9q8zX0NcDW2p.m3u8"
+  },
+  "ivs_stream_key": {
+    "sensitive": true,
+    "type": "string",
+    "value": "Siehe AWS Console: IVS \u003e Channels \u003e honigwabe-HonigwabeLive \u003e Stream key"
+  },
+  "s3_bucket_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "honigwabe-website-081033004511"
+  },
+  "shop_api_endpoint": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://xd3b0v72nl.execute-api.eu-central-1.amazonaws.com/"
+  },
+  "shop_product_images_bucket": {
+    "sensitive": false,
+    "type": "string",
+    "value": "honigwabe-product-images-081033004511"
+  },
+  "shop_products_table": {
+    "sensitive": false,
+    "type": "string",
+    "value": "honigwabe-products"
+  },
+  "sponsor_api_endpoint": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://t1z6kdrqog.execute-api.eu-central-1.amazonaws.com/"
+  },
+  "sponsor_assets_bucket": {
+    "sensitive": false,
+    "type": "string",
+    "value": "honigwabe-sponsor-assets-081033004511"
+  },
+  "team_api_endpoint": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://1rhnpplzti.execute-api.eu-central-1.amazonaws.com"
+  },
+  "team_images_info": {
+    "sensitive": false,
+    "type": "string",
+    "value": "Uses honigwabe-thumbnails-production bucket and https://d230uf53iuiz3v.cloudfront.net CDN"
+  },
+  "team_members_table": {
+    "sensitive": false,
+    "type": "string",
+    "value": "honigwabe-team-members"
+  },
+  "thumbnails_cdn_url": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://d230uf53iuiz3v.cloudfront.net"
+  },
+  "user_api_endpoint": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://1rhnpplzti.execute-api.eu-central-1.amazonaws.com"
+  },
+  "video_api_endpoint": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://1rhnpplzti.execute-api.eu-central-1.amazonaws.com/videos"
+  },
+  "videos_bucket": {
+    "sensitive": false,
+    "type": "string",
+    "value": "honigwabe-videos-production"
+  },
+  "website_url": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://honigwabe.live"
+  }
+}

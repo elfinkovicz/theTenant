@@ -3,9 +3,9 @@
 
 # DynamoDB Table for Advertisement
 resource "aws_dynamodb_table" "advertisements" {
-  name           = "${var.project_name}-advertisements"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "adId"
+  name         = "${var.project_name}-advertisements"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "adId"
 
   attribute {
     name = "adId"
@@ -85,11 +85,11 @@ data "archive_file" "ad_lambda" {
 resource "aws_lambda_function" "ad_api" {
   filename         = data.archive_file.ad_lambda.output_path
   function_name    = "${var.project_name}-ad-api"
-  role            = aws_iam_role.ad_lambda.arn
-  handler         = "index.handler"
+  role             = aws_iam_role.ad_lambda.arn
+  handler          = "index.handler"
   source_code_hash = data.archive_file.ad_lambda.output_base64sha256
-  runtime         = "nodejs18.x"
-  timeout         = 30
+  runtime          = "nodejs18.x"
+  timeout          = 30
 
   environment {
     variables = {

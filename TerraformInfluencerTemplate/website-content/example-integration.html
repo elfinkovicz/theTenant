@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Integration Beispiel</title>
+</head>
+<body>
+    <h1>Backend Integration Beispiele</h1>
+    
+    <!-- Kontaktformular -->
+    <section id="contact">
+        <h2>Kontaktformular</h2>
+        <form id="contactForm">
+            <input type="text" id="name" placeholder="Name" required>
+            <input type="email" id="email" placeholder="E-Mail" required>
+            <textarea id="message" placeholder="Nachricht" required></textarea>
+            <button type="submit">Senden</button>
+        </form>
+    </section>
+
+    <!-- Live Stream -->
+    <section id="stream">
+        <h2>Live Stream</h2>
+        <video id="video-player" controls></video>
+    </section>
+
+    <!-- Chat -->
+    <section id="chat">
+        <h2>Live Chat</h2>
+        <div id="chat-messages"></div>
+        <input type="text" id="chat-input" placeholder="Nachricht...">
+        <button id="send-chat">Senden</button>
+    </section>
+
+    <!-- Login -->
+    <section id="auth">
+        <h2>Login</h2>
+        <button id="login-btn">Mit Cognito anmelden</button>
+        <button id="logout-btn" style="display:none;">Abmelden</button>
+        <div id="user-info"></div>
+    </section>
+
+    <script>
+        // WICHTIG: Ersetze diese Werte mit deinen Terraform Outputs
+        const CONFIG = {
+            contactApiEndpoint: 'YOUR_CONTACT_API_ENDPOINT',
+            ivsPlaybackUrl: 'YOUR_IVS_PLAYBACK_URL',
+            chatApiEndpoint: 'YOUR_CHAT_API_ENDPOINT',
+            cognitoUserPoolId: 'YOUR_USER_POOL_ID',
+            cognitoClientId: 'YOUR_CLIENT_ID',
+            cognitoDomain: 'YOUR_COGNITO_DOMAIN'
+        };
+
+        // Kontaktformular
+        document.getElementById('contactForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const response = await fetch(`${CONFIG.contactApiEndpoint}/contact`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: document.getElementById('name').value,
+                    email: document.getElementById('email').value,
+                    message: document.getElementById('message').value
+                })
+            });
+            const result = await response.json();
+            alert(result.message || 'Nachricht gesendet!');
+        });
+
+        // IVS Stream (benötigt amazon-ivs-player.js)
+        // <script src="https://player.live-video.net/1.x.x/amazon-ivs-player.min.js"></script>
+        if (typeof IVSPlayer !== 'undefined') {
+            const player = IVSPlayer.create();
+            player.attachHTMLVideoElement(document.getElementById('video-player'));
+            player.load(CONFIG.ivsPlaybackUrl);
+        }
+
+        // Cognito Login
+        document.getElementById('login-btn').addEventListener('click', () => {
+            const loginUrl = `https://${CONFIG.cognitoDomain}.auth.eu-central-1.amazoncognito.com/login?client_id=${CONFIG.cognitoClientId}&response_type=code&redirect_uri=${window.location.origin}/callback`;
+            window.location.href = loginUrl;
+        });
+    </script>
+</body>
+</html>
