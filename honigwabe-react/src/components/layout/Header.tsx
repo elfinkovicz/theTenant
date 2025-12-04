@@ -1,14 +1,32 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Menu, X, User, LogOut } from 'lucide-react'
 import { useAuthStore } from '@store/authStore'
+import { heroService, HeroContent } from '../../services/hero.service'
 import clsx from 'clsx'
 
 export const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [heroContent, setHeroContent] = useState<HeroContent | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const location = useLocation()
   const { isAuthenticated, user, logout } = useAuthStore()
+
+  useEffect(() => {
+    loadHeroContent()
+  }, [])
+
+  const loadHeroContent = async () => {
+    try {
+      const content = await heroService.getHeroContent()
+      setHeroContent(content)
+    } catch (error) {
+      console.error('Failed to load hero content:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const navItems = [
     { path: '/', label: 'Home' },
@@ -16,6 +34,7 @@ export const Header = () => {
     { path: '/videos', label: 'Videos' },
     { path: '/shop', label: 'Shop' },
     { path: '/events', label: 'Events' },
+    { path: '/newsfeed', label: 'Newsfeed' },
     { path: '/channels', label: 'Channels' },
     { path: '/team', label: 'Team' },
     { path: '/contact', label: 'Contact' },
@@ -33,8 +52,25 @@ export const Header = () => {
               whileHover={{ scale: 1.05 }}
               className="text-2xl font-bold glow-text flex items-center gap-2"
             >
-              <span className="text-3xl">🎬</span>
-              <span>Your Brand</span>
+              {!isLoading && (
+                <>
+                  {heroContent?.navbarLogoUrl ? (
+                    <div className="w-10 h-10">
+                      <img 
+                        src={heroContent.navbarLogoUrl} 
+                        alt="Logo" 
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <span className="text-3xl">🐝</span>
+                  )}
+                </>
+              )}
+              {isLoading && (
+                <div className="w-10 h-10 animate-pulse bg-dark-800 rounded-full"></div>
+              )}
+              <span>{heroContent?.navbarTitle || 'Your Brand'}</span>
             </motion.div>
           </Link>
 

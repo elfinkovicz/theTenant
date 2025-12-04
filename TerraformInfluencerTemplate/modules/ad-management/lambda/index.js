@@ -68,9 +68,14 @@ function response(statusCode, body) {
 
 exports.handler = async (event) => {
   console.log('Event:', JSON.stringify(event, null, 2));
+  console.log('Request Context:', JSON.stringify(event.requestContext, null, 2));
 
-  const method = event.requestContext.http?.method || event.httpMethod || event.requestContext.httpMethod;
-  const path = event.requestContext.http?.path || event.path || event.requestContext.path;
+  // Support both API Gateway v1 and v2 formats
+  const method = event.requestContext?.http?.method || event.httpMethod || event.requestContext?.httpMethod || event.requestContext?.routeKey?.split(' ')[0];
+  const path = event.requestContext?.http?.path || event.path || event.requestContext?.path || event.rawPath || event.requestContext?.resourcePath;
+  
+  console.log('Detected method:', method);
+  console.log('Detected path:', path);
 
   // Handle OPTIONS
   if (method === 'OPTIONS') {

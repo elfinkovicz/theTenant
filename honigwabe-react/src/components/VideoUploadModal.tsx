@@ -90,12 +90,13 @@ export function VideoUploadModal({ isOpen, onClose, onSuccess }: VideoUploadModa
       });
 
       // 3. Upload thumbnail if provided
-      let thumbnailKey = uploadData.thumbnailKey;
+      let thumbnailKey: string | undefined = undefined;
       if (thumbnailFile) {
         const thumbnailData = await videoService.generateUploadUrl(
           thumbnailFile.name,
           thumbnailFile.type,
-          'thumbnail'
+          'thumbnail',
+          uploadData.videoId  // Pass videoId for thumbnail upload
         );
         await videoService.uploadToS3(thumbnailData.uploadUrl, thumbnailFile);
         thumbnailKey = thumbnailData.thumbnailKey;

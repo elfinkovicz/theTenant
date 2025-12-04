@@ -116,7 +116,7 @@ resource "aws_lambda_function" "team_api" {
   role            = aws_iam_role.team_lambda.arn
   handler         = "index.handler"
   source_code_hash = data.archive_file.team_lambda.output_base64sha256
-  runtime         = "nodejs18.x"
+  runtime         = "nodejs20.x"
   timeout         = 30
 
   environment {

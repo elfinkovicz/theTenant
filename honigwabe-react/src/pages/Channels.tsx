@@ -1,5 +1,9 @@
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { ExternalLink, Users, Youtube, Twitch, Instagram, Facebook, Twitter, Linkedin, Music, Radio, Mic, Video, DollarSign, Gamepad2, MessageCircle, Mail, ShoppingBag } from 'lucide-react'
+import { ExternalLink, Users, Youtube, Twitch, Instagram, Facebook, Twitter, Linkedin, Music, Radio, Mic, Video, DollarSign, Gamepad2, MessageCircle, Mail, ShoppingBag, Settings } from 'lucide-react'
+import { SocialChannel, channelService } from '../services/channel.service'
+import { ChannelManagementModal } from '../components/ChannelManagementModal'
+import { useAdmin } from '../hooks/useAdmin'
 
 // Custom Platform Icons as SVG components
 const TikTokIcon = () => (
@@ -38,18 +42,6 @@ const SnapchatIcon = () => (
   </svg>
 )
 
-interface SocialChannel {
-  id: string
-  name: string
-  platform: string
-  url: string
-  followers: string
-  description: string
-  color: string
-  iconType: string
-  category: string
-}
-
 // Function to get the appropriate icon for each platform
 const getPlatformIcon = (iconType: string) => {
   const iconProps = { size: 48, strokeWidth: 1.5 }
@@ -81,68 +73,93 @@ const getPlatformIcon = (iconType: string) => {
 }
 
 export const Channels = () => {
-  const socialChannels: SocialChannel[] = [
+  const [channels, setChannels] = useState<SocialChannel[]>([])
+  const [loading, setLoading] = useState(true)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const { isAdmin } = useAdmin()
+
+  useEffect(() => {
+    loadChannels()
+  }, [])
+
+  const loadChannels = async () => {
+    try {
+      const data = await channelService.getChannels()
+      setChannels(data)
+    } catch (error) {
+      console.error('Failed to load channels:', error)
+      // Fallback to default channels
+      setChannels(getDefaultChannels())
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const getDefaultChannels = (): SocialChannel[] => [
     // 🎵 Musik-Streaming
-    { id: 'spotify', name: '@yourchannel', platform: 'Spotify', url: 'https://open.spotify.com/artist/yourchannel', followers: '50K', description: 'Listen to our music and playlists', color: '#1DB954', iconType: 'spotify', category: 'Musik-Streaming' },
-    { id: 'apple-music', name: 'Your Artist', platform: 'Apple Music', url: 'https://music.apple.com/artist/yourchannel', followers: '30K', description: 'Stream on Apple Music', color: '#FA243C', iconType: 'music', category: 'Musik-Streaming' },
-    { id: 'youtube-music', name: '@yourchannel', platform: 'YouTube Music', url: 'https://music.youtube.com/channel/yourchannel', followers: '40K', description: 'Music videos and albums', color: '#FF0000', iconType: 'youtube', category: 'Musik-Streaming' },
-    { id: 'amazon-music', name: 'Your Artist', platform: 'Amazon Music', url: 'https://music.amazon.com/artists/yourchannel', followers: '20K', description: 'Stream on Amazon Music', color: '#FF9900', iconType: 'music', category: 'Musik-Streaming' },
-    { id: 'deezer', name: 'Your Artist', platform: 'Deezer', url: 'https://www.deezer.com/artist/yourchannel', followers: '15K', description: 'Listen on Deezer', color: '#FF0092', iconType: 'music', category: 'Musik-Streaming' },
-    { id: 'tidal', name: 'Your Artist', platform: 'Tidal', url: 'https://tidal.com/browse/artist/yourchannel', followers: '10K', description: 'High-quality audio streaming', color: '#000000', iconType: 'music', category: 'Musik-Streaming' },
-    { id: 'soundcloud', name: '@yourchannel', platform: 'SoundCloud', url: 'https://soundcloud.com/yourchannel', followers: '60K', description: 'Original tracks and remixes', color: '#FF5500', iconType: 'music', category: 'Musik-Streaming' },
-    { id: 'audiomack', name: '@yourchannel', platform: 'Audiomack', url: 'https://audiomack.com/yourchannel', followers: '25K', description: 'Stream and download music', color: '#FFA200', iconType: 'music', category: 'Musik-Streaming' },
+    { id: 'spotify', name: '@yourchannel', platform: 'Spotify', url: 'https://open.spotify.com/artist/yourchannel', followers: '50K', description: 'Listen to our music and playlists', color: '#1DB954', iconType: 'spotify', category: 'Musik-Streaming', enabled: true },
+    { id: 'apple-music', name: 'Your Artist', platform: 'Apple Music', url: 'https://music.apple.com/artist/yourchannel', followers: '30K', description: 'Stream on Apple Music', color: '#FA243C', iconType: 'music', category: 'Musik-Streaming', enabled: true },
+    { id: 'youtube-music', name: '@yourchannel', platform: 'YouTube Music', url: 'https://music.youtube.com/channel/yourchannel', followers: '40K', description: 'Music videos and albums', color: '#FF0000', iconType: 'youtube', category: 'Musik-Streaming', enabled: true },
+    { id: 'amazon-music', name: 'Your Artist', platform: 'Amazon Music', url: 'https://music.amazon.com/artists/yourchannel', followers: '20K', description: 'Stream on Amazon Music', color: '#FF9900', iconType: 'music', category: 'Musik-Streaming', enabled: true },
+    { id: 'deezer', name: 'Your Artist', platform: 'Deezer', url: 'https://www.deezer.com/artist/yourchannel', followers: '15K', description: 'Listen on Deezer', color: '#FF0092', iconType: 'music', category: 'Musik-Streaming', enabled: true },
+    { id: 'tidal', name: 'Your Artist', platform: 'Tidal', url: 'https://tidal.com/browse/artist/yourchannel', followers: '10K', description: 'High-quality audio streaming', color: '#000000', iconType: 'music', category: 'Musik-Streaming', enabled: true },
+    { id: 'soundcloud', name: '@yourchannel', platform: 'SoundCloud', url: 'https://soundcloud.com/yourchannel', followers: '60K', description: 'Original tracks and remixes', color: '#FF5500', iconType: 'music', category: 'Musik-Streaming', enabled: true },
+    { id: 'audiomack', name: '@yourchannel', platform: 'Audiomack', url: 'https://audiomack.com/yourchannel', followers: '25K', description: 'Stream and download music', color: '#FFA200', iconType: 'music', category: 'Musik-Streaming', enabled: true },
     
     // 🎤 Upload & Creator Portale
-    { id: 'bandcamp', name: 'yourchannel', platform: 'Bandcamp', url: 'https://yourchannel.bandcamp.com', followers: '8K', description: 'Buy music and merch directly', color: '#629AA9', iconType: 'music', category: 'Upload & Creator Portale' },
-    { id: 'reverbnation', name: 'yourchannel', platform: 'ReverbNation', url: 'https://www.reverbnation.com/yourchannel', followers: '12K', description: 'Music promotion and distribution', color: '#E43526', iconType: 'music', category: 'Upload & Creator Portale' },
+    { id: 'bandcamp', name: 'yourchannel', platform: 'Bandcamp', url: 'https://yourchannel.bandcamp.com', followers: '8K', description: 'Buy music and merch directly', color: '#629AA9', iconType: 'music', category: 'Upload & Creator Portale', enabled: true },
+    { id: 'reverbnation', name: 'yourchannel', platform: 'ReverbNation', url: 'https://www.reverbnation.com/yourchannel', followers: '12K', description: 'Music promotion and distribution', color: '#E43526', iconType: 'music', category: 'Upload & Creator Portale', enabled: true },
     
     // 🎙️ Podcast-Plattformen
-    { id: 'spotify-podcasts', name: 'Your Podcast', platform: 'Spotify Podcasts', url: 'https://open.spotify.com/show/yourchannel', followers: '35K', description: 'Listen to our podcast', color: '#1DB954', iconType: 'mic', category: 'Podcast-Plattformen' },
-    { id: 'apple-podcasts', name: 'Your Podcast', platform: 'Apple Podcasts', url: 'https://podcasts.apple.com/podcast/yourchannel', followers: '28K', description: 'Subscribe on Apple Podcasts', color: '#9933CC', iconType: 'mic', category: 'Podcast-Plattformen' },
-    { id: 'google-podcasts', name: 'Your Podcast', platform: 'YouTube Podcasts', url: 'https://podcasts.google.com/feed/yourchannel', followers: '22K', description: 'Listen on YouTube Podcasts', color: '#FF0000', iconType: 'radio', category: 'Podcast-Plattformen' },
-    { id: 'amazon-podcasts', name: 'Your Podcast', platform: 'Amazon Podcasts', url: 'https://music.amazon.com/podcasts/yourchannel', followers: '15K', description: 'Stream on Amazon Music', color: '#FF9900', iconType: 'mic', category: 'Podcast-Plattformen' },
-    { id: 'stitcher', name: 'Your Podcast', platform: 'Stitcher', url: 'https://www.stitcher.com/podcast/yourchannel', followers: '10K', description: 'Listen on Stitcher', color: '#000000', iconType: 'radio', category: 'Podcast-Plattformen' },
+    { id: 'spotify-podcasts', name: 'Your Podcast', platform: 'Spotify Podcasts', url: 'https://open.spotify.com/show/yourchannel', followers: '35K', description: 'Listen to our podcast', color: '#1DB954', iconType: 'mic', category: 'Podcast-Plattformen', enabled: true },
+    { id: 'apple-podcasts', name: 'Your Podcast', platform: 'Apple Podcasts', url: 'https://podcasts.apple.com/podcast/yourchannel', followers: '28K', description: 'Subscribe on Apple Podcasts', color: '#9933CC', iconType: 'mic', category: 'Podcast-Plattformen', enabled: true },
+    { id: 'google-podcasts', name: 'Your Podcast', platform: 'YouTube Podcasts', url: 'https://podcasts.google.com/feed/yourchannel', followers: '22K', description: 'Listen on YouTube Podcasts', color: '#FF0000', iconType: 'radio', category: 'Podcast-Plattformen', enabled: true },
+    { id: 'amazon-podcasts', name: 'Your Podcast', platform: 'Amazon Podcasts', url: 'https://music.amazon.com/podcasts/yourchannel', followers: '15K', description: 'Stream on Amazon Music', color: '#FF9900', iconType: 'mic', category: 'Podcast-Plattformen', enabled: true },
+    { id: 'stitcher', name: 'Your Podcast', platform: 'Stitcher', url: 'https://www.stitcher.com/podcast/yourchannel', followers: '10K', description: 'Listen on Stitcher', color: '#000000', iconType: 'radio', category: 'Podcast-Plattformen', enabled: true },
     
     // 🎥 Video & Livestreaming
-    { id: 'youtube', name: '@YourChannel', platform: 'YouTube', url: 'https://youtube.com/@yourchannel', followers: '100K', description: 'Subscribe for videos and live streams', color: '#FF0000', iconType: 'youtube', category: 'Video & Livestreaming' },
-    { id: 'vimeo', name: 'yourchannel', platform: 'Vimeo', url: 'https://vimeo.com/yourchannel', followers: '15K', description: 'High-quality video content', color: '#1AB7EA', iconType: 'video', category: 'Video & Livestreaming' },
-    { id: 'twitch', name: 'YourChannel', platform: 'Twitch', url: 'https://twitch.tv/yourchannel', followers: '50K', description: 'Watch live streams', color: '#9146FF', iconType: 'twitch', category: 'Video & Livestreaming' },
-    { id: 'youtube-live', name: '@YourChannel', platform: 'YouTube Live', url: 'https://youtube.com/@yourchannel/live', followers: '100K', description: 'Live streaming on YouTube', color: '#FF0000', iconType: 'youtube', category: 'Video & Livestreaming' },
-    { id: 'tiktok-live', name: '@yourchannel', platform: 'TikTok Live', url: 'https://tiktok.com/@yourchannel/live', followers: '200K', description: 'Live broadcasts on TikTok', color: '#000000', iconType: 'tiktok', category: 'Video & Livestreaming' },
-    { id: 'kick', name: 'yourchannel', platform: 'Kick', url: 'https://kick.com/yourchannel', followers: '30K', description: 'Live streaming platform', color: '#53FC18', iconType: 'video', category: 'Video & Livestreaming' },
+    { id: 'youtube', name: '@YourChannel', platform: 'YouTube', url: 'https://youtube.com/@yourchannel', followers: '100K', description: 'Subscribe for videos and live streams', color: '#FF0000', iconType: 'youtube', category: 'Video & Livestreaming', enabled: true },
+    { id: 'vimeo', name: 'yourchannel', platform: 'Vimeo', url: 'https://vimeo.com/yourchannel', followers: '15K', description: 'High-quality video content', color: '#1AB7EA', iconType: 'video', category: 'Video & Livestreaming', enabled: true },
+    { id: 'twitch', name: 'YourChannel', platform: 'Twitch', url: 'https://twitch.tv/yourchannel', followers: '50K', description: 'Watch live streams', color: '#9146FF', iconType: 'twitch', category: 'Video & Livestreaming', enabled: true },
+    { id: 'youtube-live', name: '@YourChannel', platform: 'YouTube Live', url: 'https://youtube.com/@yourchannel/live', followers: '100K', description: 'Live streaming on YouTube', color: '#FF0000', iconType: 'youtube', category: 'Video & Livestreaming', enabled: true },
+    { id: 'tiktok-live', name: '@yourchannel', platform: 'TikTok Live', url: 'https://tiktok.com/@yourchannel/live', followers: '200K', description: 'Live broadcasts on TikTok', color: '#000000', iconType: 'tiktok', category: 'Video & Livestreaming', enabled: true },
+    { id: 'kick', name: 'yourchannel', platform: 'Kick', url: 'https://kick.com/yourchannel', followers: '30K', description: 'Live streaming platform', color: '#53FC18', iconType: 'video', category: 'Video & Livestreaming', enabled: true },
     
     // 📸 Social Media
-    { id: 'tiktok', name: '@yourchannel', platform: 'TikTok', url: 'https://tiktok.com/@yourchannel', followers: '200K', description: 'Short videos and trending content', color: '#000000', iconType: 'tiktok', category: 'Social Media' },
-    { id: 'instagram', name: '@yourchannel', platform: 'Instagram', url: 'https://instagram.com/yourchannel', followers: '75K', description: 'Photos, Reels and Stories', color: '#E4405F', iconType: 'instagram', category: 'Social Media' },
-    { id: 'instagram-reels', name: '@yourchannel', platform: 'Instagram Reels', url: 'https://instagram.com/yourchannel/reels', followers: '75K', description: 'Short-form video content', color: '#E4405F', iconType: 'instagram', category: 'Social Media' },
-    { id: 'youtube-shorts', name: '@YourChannel', platform: 'YouTube Shorts', url: 'https://youtube.com/@yourchannel/shorts', followers: '100K', description: 'Short vertical videos', color: '#FF0000', iconType: 'youtube', category: 'Social Media' },
-    { id: 'snapchat', name: '@yourchannel', platform: 'Snapchat', url: 'https://snapchat.com/add/yourchannel', followers: '20K', description: 'Daily snaps and Spotlight', color: '#FFFC00', iconType: 'snapchat', category: 'Social Media' },
-    { id: 'pinterest', name: '@yourchannel', platform: 'Pinterest', url: 'https://pinterest.com/yourchannel', followers: '40K', description: 'Visual inspiration and ideas', color: '#E60023', iconType: 'pinterest', category: 'Social Media' },
-    { id: 'behance', name: 'yourchannel', platform: 'Behance', url: 'https://behance.net/yourchannel', followers: '12K', description: 'Creative portfolio showcase', color: '#1769FF', iconType: 'video', category: 'Social Media' },
-    { id: 'facebook', name: 'Your Channel', platform: 'Facebook', url: 'https://facebook.com/yourchannel', followers: '60K', description: 'Community and updates', color: '#1877F2', iconType: 'facebook', category: 'Social Media' },
-    { id: 'twitter', name: '@yourchannel', platform: 'X (Twitter)', url: 'https://x.com/yourchannel', followers: '45K', description: 'Latest updates and news', color: '#000000', iconType: 'twitter', category: 'Social Media' },
-    { id: 'threads', name: '@yourchannel', platform: 'Threads', url: 'https://threads.net/@yourchannel', followers: '25K', description: 'Text-based conversations', color: '#000000', iconType: 'message', category: 'Social Media' },
-    { id: 'linkedin', name: 'Your Name', platform: 'LinkedIn', url: 'https://linkedin.com/in/yourchannel', followers: '10K', description: 'Professional network', color: '#0A66C2', iconType: 'linkedin', category: 'Social Media' },
-    { id: 'reddit', name: 'r/yourchannel', platform: 'Reddit', url: 'https://reddit.com/r/yourchannel', followers: '15K', description: 'Community discussions', color: '#FF4500', iconType: 'reddit', category: 'Social Media' },
+    { id: 'tiktok', name: '@yourchannel', platform: 'TikTok', url: 'https://tiktok.com/@yourchannel', followers: '200K', description: 'Short videos and trending content', color: '#000000', iconType: 'tiktok', category: 'Social Media', enabled: true },
+    { id: 'instagram', name: '@yourchannel', platform: 'Instagram', url: 'https://instagram.com/yourchannel', followers: '75K', description: 'Photos, Reels and Stories', color: '#E4405F', iconType: 'instagram', category: 'Social Media', enabled: true },
+    { id: 'instagram-reels', name: '@yourchannel', platform: 'Instagram Reels', url: 'https://instagram.com/yourchannel/reels', followers: '75K', description: 'Short-form video content', color: '#E4405F', iconType: 'instagram', category: 'Social Media', enabled: true },
+    { id: 'youtube-shorts', name: '@YourChannel', platform: 'YouTube Shorts', url: 'https://youtube.com/@yourchannel/shorts', followers: '100K', description: 'Short vertical videos', color: '#FF0000', iconType: 'youtube', category: 'Social Media', enabled: true },
+    { id: 'snapchat', name: '@yourchannel', platform: 'Snapchat', url: 'https://snapchat.com/add/yourchannel', followers: '20K', description: 'Daily snaps and Spotlight', color: '#FFFC00', iconType: 'snapchat', category: 'Social Media', enabled: true },
+    { id: 'pinterest', name: '@yourchannel', platform: 'Pinterest', url: 'https://pinterest.com/yourchannel', followers: '40K', description: 'Visual inspiration and ideas', color: '#E60023', iconType: 'pinterest', category: 'Social Media', enabled: true },
+    { id: 'behance', name: 'yourchannel', platform: 'Behance', url: 'https://behance.net/yourchannel', followers: '12K', description: 'Creative portfolio showcase', color: '#1769FF', iconType: 'video', category: 'Social Media', enabled: true },
+    { id: 'facebook', name: 'Your Channel', platform: 'Facebook', url: 'https://facebook.com/yourchannel', followers: '60K', description: 'Community and updates', color: '#1877F2', iconType: 'facebook', category: 'Social Media', enabled: true },
+    { id: 'twitter', name: '@yourchannel', platform: 'X (Twitter)', url: 'https://x.com/yourchannel', followers: '45K', description: 'Latest updates and news', color: '#000000', iconType: 'twitter', category: 'Social Media', enabled: true },
+    { id: 'threads', name: '@yourchannel', platform: 'Threads', url: 'https://threads.net/@yourchannel', followers: '25K', description: 'Text-based conversations', color: '#000000', iconType: 'message', category: 'Social Media', enabled: true },
+    { id: 'linkedin', name: 'Your Name', platform: 'LinkedIn', url: 'https://linkedin.com/in/yourchannel', followers: '10K', description: 'Professional network', color: '#0A66C2', iconType: 'linkedin', category: 'Social Media', enabled: true },
+    { id: 'reddit', name: 'r/yourchannel', platform: 'Reddit', url: 'https://reddit.com/r/yourchannel', followers: '15K', description: 'Community discussions', color: '#FF4500', iconType: 'reddit', category: 'Social Media', enabled: true },
     
     // 💰 Creator-Monetarisierung
-    { id: 'patreon', name: 'yourchannel', platform: 'Patreon', url: 'https://patreon.com/yourchannel', followers: '5K', description: 'Support with monthly subscriptions', color: '#FF424D', iconType: 'dollar', category: 'Creator-Monetarisierung' },
-    { id: 'ko-fi', name: 'yourchannel', platform: 'Ko-fi', url: 'https://ko-fi.com/yourchannel', followers: '3K', description: 'Buy me a coffee', color: '#FF5E5B', iconType: 'dollar', category: 'Creator-Monetarisierung' },
-    { id: 'buymeacoffee', name: 'yourchannel', platform: 'Buy Me A Coffee', url: 'https://buymeacoffee.com/yourchannel', followers: '2K', description: 'One-time support', color: '#FFDD00', iconType: 'dollar', category: 'Creator-Monetarisierung' },
-    { id: 'substack', name: 'yourchannel', platform: 'Substack', url: 'https://yourchannel.substack.com', followers: '8K', description: 'Newsletter and paid content', color: '#FF6719', iconType: 'mail', category: 'Creator-Monetarisierung' },
-    { id: 'gumroad', name: 'yourchannel', platform: 'Gumroad', url: 'https://gumroad.com/yourchannel', followers: '4K', description: 'Digital products and courses', color: '#FF90E8', iconType: 'shopping', category: 'Creator-Monetarisierung' },
+    { id: 'patreon', name: 'yourchannel', platform: 'Patreon', url: 'https://patreon.com/yourchannel', followers: '5K', description: 'Support with monthly subscriptions', color: '#FF424D', iconType: 'dollar', category: 'Creator-Monetarisierung', enabled: true },
+    { id: 'ko-fi', name: 'yourchannel', platform: 'Ko-fi', url: 'https://ko-fi.com/yourchannel', followers: '3K', description: 'Buy me a coffee', color: '#FF5E5B', iconType: 'dollar', category: 'Creator-Monetarisierung', enabled: true },
+    { id: 'buymeacoffee', name: 'yourchannel', platform: 'Buy Me A Coffee', url: 'https://buymeacoffee.com/yourchannel', followers: '2K', description: 'One-time support', color: '#FFDD00', iconType: 'dollar', category: 'Creator-Monetarisierung', enabled: true },
+    { id: 'substack', name: 'yourchannel', platform: 'Substack', url: 'https://yourchannel.substack.com', followers: '8K', description: 'Newsletter and paid content', color: '#FF6719', iconType: 'mail', category: 'Creator-Monetarisierung', enabled: true },
+    { id: 'gumroad', name: 'yourchannel', platform: 'Gumroad', url: 'https://gumroad.com/yourchannel', followers: '4K', description: 'Digital products and courses', color: '#FF90E8', iconType: 'shopping', category: 'Creator-Monetarisierung', enabled: true },
     
     // 🎮 Gaming & Interactive
-    { id: 'steam', name: 'yourchannel', platform: 'Steam', url: 'https://steamcommunity.com/id/yourchannel', followers: '18K', description: 'Gaming content and workshop', color: '#171A21', iconType: 'gamepad', category: 'Gaming & Interactive' },
-    { id: 'discord', name: 'Your Server', platform: 'Discord', url: 'https://discord.gg/yourchannel', followers: '25K', description: 'Community chat and voice', color: '#5865F2', iconType: 'discord', category: 'Gaming & Interactive' },
+    { id: 'steam', name: 'yourchannel', platform: 'Steam', url: 'https://steamcommunity.com/id/yourchannel', followers: '18K', description: 'Gaming content and workshop', color: '#171A21', iconType: 'gamepad', category: 'Gaming & Interactive', enabled: true },
+    { id: 'discord', name: 'Your Server', platform: 'Discord', url: 'https://discord.gg/yourchannel', followers: '25K', description: 'Community chat and voice', color: '#5865F2', iconType: 'discord', category: 'Gaming & Interactive', enabled: true },
     
     // 🧵 Community & Chat
-    { id: 'telegram', name: '@yourchannel', platform: 'Telegram', url: 'https://t.me/yourchannel', followers: '30K', description: 'Exclusive updates and chat', color: '#26A5E4', iconType: 'message', category: 'Community & Chat' },
-    { id: 'whatsapp', name: 'Channel', platform: 'WhatsApp Channels', url: 'https://whatsapp.com/channel/yourchannel', followers: '35K', description: 'Direct updates via WhatsApp', color: '#25D366', iconType: 'message', category: 'Community & Chat' },
+    { id: 'telegram', name: '@yourchannel', platform: 'Telegram', url: 'https://t.me/yourchannel', followers: '30K', description: 'Exclusive updates and chat', color: '#26A5E4', iconType: 'message', category: 'Community & Chat', enabled: true },
+    { id: 'whatsapp', name: 'Channel', platform: 'WhatsApp Channels', url: 'https://whatsapp.com/channel/yourchannel', followers: '35K', description: 'Direct updates via WhatsApp', color: '#25D366', iconType: 'message', category: 'Community & Chat', enabled: true },
     
     // 📰 Newsletter & Publishing
-    { id: 'medium', name: '@yourchannel', platform: 'Medium', url: 'https://medium.com/@yourchannel', followers: '6K', description: 'Long-form articles and stories', color: '#000000', iconType: 'mail', category: 'Newsletter & Publishing' },
+    { id: 'medium', name: '@yourchannel', platform: 'Medium', url: 'https://medium.com/@yourchannel', followers: '6K', description: 'Long-form articles and stories', color: '#000000', iconType: 'mail', category: 'Newsletter & Publishing', enabled: true },
   ]
+
+  // Filter enabled channels (or show all for admins)
+  const visibleChannels = isAdmin ? channels : channels.filter(c => c.enabled)
 
   // Group channels by category with custom order
   const categoryOrder = [
@@ -160,7 +177,7 @@ export const Channels = () => {
   const channelsByCategory = categoryOrder
     .map(category => ({
       name: category,
-      channels: socialChannels.filter(c => c.category === category)
+      channels: visibleChannels.filter(c => c.category === category)
     }))
     .filter(cat => cat.channels.length > 0)
 
@@ -181,20 +198,37 @@ export const Channels = () => {
       {/* Header */}
       <section className="relative py-12 overflow-hidden bg-gradient-to-br from-primary-900/20 via-dark-950 to-dark-950">
         <div className="container mx-auto px-4">
-          <div>
-            <h1 className="text-4xl md:text-5xl font-bold mb-2">
-              <span className="glow-text">Social Media Channels</span>
-            </h1>
-            <p className="text-dark-400 text-lg">
-              Connect with us on your favorite platforms. Follow, subscribe, and join our community!
-            </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-4xl md:text-5xl font-bold mb-2">
+                <span className="glow-text">Social Media Channels</span>
+              </h1>
+              <p className="text-dark-400 text-lg">
+                Connect with us on your favorite platforms. Follow, subscribe, and join our community!
+              </p>
+            </div>
+            {isAdmin && (
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="btn-primary flex items-center gap-2"
+              >
+                <Settings size={20} />
+                Optionen
+              </button>
+            )}
           </div>
         </div>
       </section>
 
       <div className="container mx-auto px-4 py-8">
-        {/* Categories */}
-        {channelsByCategory.map((category) => (
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
+          </div>
+        ) : (
+          <>
+            {/* Categories */}
+            {channelsByCategory.map((category) => (
           <div
             key={category.name}
             className="mb-12"
@@ -272,7 +306,8 @@ export const Channels = () => {
               ))}
             </div>
           </div>
-        ))}
+        ))}</>
+        )}
 
         {/* CTA Section */}
         <div className="mt-16 card text-center bg-gradient-to-br from-primary-900/20 to-dark-900">
@@ -293,6 +328,14 @@ export const Channels = () => {
           </div>
         </div>
       </div>
+
+      {/* Modal */}
+      <ChannelManagementModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={loadChannels}
+        channels={channels}
+      />
     </div>
   )
 }

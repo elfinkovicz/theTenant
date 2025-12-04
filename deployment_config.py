@@ -14,7 +14,7 @@ class DeploymentConfig:
         self.CREATOR_NAME = "honigwabe"              # lowercase, keine Leerzeichen
         self.CREATOR_DISPLAY_NAME = "Honigwabe"      # Anzeige-Name
         self.DOMAIN_NAME = "honigwabe.live"                # Domain ohne www
-        self.WEBSITE_DOMAIN = "honigwabe.live"             # Website-Domain
+        self.WEBSITE_DOMAIN = "www.honigwabe.live"         # Website-Domain (mit www)
         
         # ============================================
         # AWS KONFIGURATION
@@ -57,6 +57,9 @@ class DeploymentConfig:
         self.ENABLE_TEAM_MANAGEMENT = True
         self.ENABLE_EVENT_MANAGEMENT = True
         self.ENABLE_AD_MANAGEMENT = True
+        self.ENABLE_HERO_MANAGEMENT = True
+        self.ENABLE_PRODUCT_MANAGEMENT = True
+        self.ENABLE_STREAM_RESTREAMING = True
         
         # ============================================
         # ADMIN CONFIGURATION
@@ -94,8 +97,8 @@ class DeploymentConfig:
         # ============================================
         # ROUTE53
         # ============================================
-        self.CREATE_ROUTE53_ZONE = True
-        self.ROUTE53_ZONE_ID = "Z09481913QRNG4GBHFLRR"
+        self.CREATE_ROUTE53_ZONE = False  # Zone existiert bereits
+        self.ROUTE53_ZONE_ID = "Z08359721A0G4IX475C7Z"  # Existierende Zone ID
         
         # ============================================
         # PFADE
@@ -220,6 +223,9 @@ class DeploymentConfig:
         print(f"  Team Management:     {self.ENABLE_TEAM_MANAGEMENT}")
         print(f"  Event Management:    {self.ENABLE_EVENT_MANAGEMENT}")
         print(f"  Ad Management:       {self.ENABLE_AD_MANAGEMENT}")
+        print(f"  Hero Management:     {self.ENABLE_HERO_MANAGEMENT}")
+        print(f"  Product Management:  {self.ENABLE_PRODUCT_MANAGEMENT}")
+        print(f"  Stream Restreaming:  {self.ENABLE_STREAM_RESTREAMING}")
         print()
         print("Admins:")
         for email in self.ADMIN_EMAILS:

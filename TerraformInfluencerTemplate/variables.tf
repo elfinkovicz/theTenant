@@ -155,3 +155,112 @@ variable "enable_ad_management" {
   type        = bool
   default     = true
 }
+
+# Hero Management
+variable "enable_hero_management" {
+  description = "Hero Section Management System aktivieren"
+  type        = bool
+  default     = true
+}
+
+# Product Management
+variable "enable_product_management" {
+  description = "Product Management System aktivieren"
+  type        = bool
+  default     = true
+}
+
+# Channel Management
+variable "enable_channel_management" {
+  description = "Social Media Channel Management System aktivieren"
+  type        = bool
+  default     = true
+}
+
+# Contact Info Management
+variable "enable_contact_info_management" {
+  description = "Contact Information Management System aktivieren"
+  type        = bool
+  default     = true
+}
+
+# Legal Management
+variable "enable_legal_management" {
+  description = "Legal Documents Management System aktivieren"
+  type        = bool
+  default     = true
+}
+
+# Stream Restreaming
+variable "enable_stream_restreaming" {
+  description = "Stream Restreaming zu Social Media Plattformen aktivieren"
+  type        = bool
+  default     = true
+}
+
+
+# PayPal Configuration
+variable "paypal_client_id" {
+  description = "PayPal Client ID (Sandbox or Production)"
+  type        = string
+  default     = ""
+}
+
+variable "paypal_secret" {
+  description = "PayPal Secret Key (Sandbox or Production)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "paypal_mode" {
+  description = "PayPal Mode: sandbox or live"
+  type        = string
+  default     = "sandbox"
+}
+
+# Newsfeed Management
+variable "enable_newsfeed_management" {
+  description = "Newsfeed Management System aktivieren"
+  type        = bool
+  default     = true
+}
+
+# WhatsApp Integration
+variable "enable_whatsapp_integration" {
+  description = "WhatsApp Integration für Newsfeed aktivieren"
+  type        = bool
+  default     = false
+}
+
+variable "whatsapp_phone_number_id" {
+  description = "WhatsApp Phone Number ID from AWS End User Messaging"
+  type        = string
+  default     = ""
+}
+
+variable "whatsapp_group_id" {
+  description = "WhatsApp Group ID to send newsfeed posts to"
+  type        = string
+  default     = ""
+}
+
+# Telegram Integration
+variable "enable_telegram_integration" {
+  description = "Telegram Bot Integration für Newsfeed aktivieren"
+  type        = bool
+  default     = false
+}
+
+variable "telegram_bot_token" {
+  description = "Telegram Bot Token from BotFather"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "telegram_chat_id" {
+  description = "Telegram Chat/Channel ID to send newsfeed posts to"
+  type        = string
+  default     = ""
+}

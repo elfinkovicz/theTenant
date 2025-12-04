@@ -122,7 +122,9 @@ def prepare_lambdas():
         "Video Management Lambda",
         "User Auth Lambda",
         "Sponsor System Lambda",
-        "Advertisement Management Lambda"
+        "Advertisement Management Lambda",
+        "Hero Management Lambda",
+        "Product Management Lambda"
     ]
     
     # Bereite Lambdas mit Dependencies vor

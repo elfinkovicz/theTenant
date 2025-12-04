@@ -75,6 +75,10 @@ resource "aws_s3_bucket" "product_images" {
   tags = {
     Name = "${var.project_name}-product-images"
   }
+  
+  lifecycle {
+    ignore_changes = [tags, tags_all]
+  }
 }
 
 resource "aws_s3_bucket_public_access_block" "product_images" {
@@ -84,6 +88,18 @@ resource "aws_s3_bucket_public_access_block" "product_images" {
   block_public_policy     = false
   ignore_public_acls      = false
   restrict_public_buckets = false
+}
+
+resource "aws_s3_bucket_cors_configuration" "product_images" {
+  bucket = aws_s3_bucket.product_images.id
+
+  cors_rule {
+    allowed_headers = ["*"]
+    allowed_methods = ["GET", "PUT", "POST", "DELETE", "HEAD"]
+    allowed_origins = ["*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
 }
 
 resource "aws_s3_bucket_policy" "product_images" {
@@ -99,6 +115,8 @@ resource "aws_s3_bucket_policy" "product_images" {
       Resource  = "${aws_s3_bucket.product_images.arn}/*"
     }]
   })
+
+  depends_on = [aws_s3_bucket_public_access_block.product_images]
 }
 
 # IAM Role für Lambda Functions
@@ -148,32 +166,8 @@ resource "aws_iam_role_policy" "shop_lambda_dynamodb" {
   })
 }
 
-# Lambda Function: Get Products
-resource "aws_lambda_function" "get_products" {
-  filename         = data.archive_file.get_products.output_path
-  function_name    = "${var.project_name}-shop-get-products"
-  role             = aws_iam_role.shop_lambda.arn
-  handler          = "index.handler"
-  source_code_hash = data.archive_file.get_products.output_base64sha256
-  runtime          = "nodejs20.x"
-  timeout          = 10
-
-  environment {
-    variables = {
-      PRODUCTS_TABLE = aws_dynamodb_table.products.name
-    }
-  }
-}
-
-data "archive_file" "get_products" {
-  type        = "zip"
-  output_path = "${path.module}/lambda/get-products.zip"
-
-  source {
-    content  = file("${path.module}/lambda/get-products.js")
-    filename = "index.js"
-  }
-}
+# Note: Product listing is now handled by product-management module
+# This module only handles orders and payments
 
 # Lambda Function: Create Order
 resource "aws_lambda_function" "create_order" {
@@ -252,12 +246,6 @@ resource "aws_apigatewayv2_stage" "shop_api" {
 }
 
 # API Gateway Integrations
-resource "aws_apigatewayv2_integration" "get_products" {
-  api_id           = aws_apigatewayv2_api.shop_api.id
-  integration_type = "AWS_PROXY"
-  integration_uri  = aws_lambda_function.get_products.invoke_arn
-}
-
 resource "aws_apigatewayv2_integration" "create_order" {
   api_id           = aws_apigatewayv2_api.shop_api.id
   integration_type = "AWS_PROXY"
@@ -271,17 +259,13 @@ resource "aws_apigatewayv2_integration" "process_payment" {
 }
 
 # API Gateway Routes
-resource "aws_apigatewayv2_route" "get_products" {
-  api_id    = aws_apigatewayv2_api.shop_api.id
-  route_key = "GET /products"
-  target    = "integrations/${aws_apigatewayv2_integration.get_products.id}"
-}
-
-resource "aws_apigatewayv2_route" "create_order" {
-  api_id    = aws_apigatewayv2_api.shop_api.id
-  route_key = "POST /orders"
-  target    = "integrations/${aws_apigatewayv2_integration.create_order.id}"
-}
+# Note: GET /products route is handled by product-management module
+# Note: Old routes commented out - replaced by multi-provider versions below
+# resource "aws_apigatewayv2_route" "create_order" {
+#   api_id    = aws_apigatewayv2_api.shop_api.id
+#   route_key = "POST /orders"
+#   target    = "integrations/${aws_apigatewayv2_integration.create_order.id}"
+# }
 
 resource "aws_apigatewayv2_route" "process_payment" {
   api_id    = aws_apigatewayv2_api.shop_api.id
@@ -290,14 +274,6 @@ resource "aws_apigatewayv2_route" "process_payment" {
 }
 
 # Lambda Permissions
-resource "aws_lambda_permission" "get_products" {
-  statement_id  = "AllowAPIGatewayInvoke"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.get_products.function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_apigatewayv2_api.shop_api.execution_arn}/*/*"
-}
-
 resource "aws_lambda_permission" "create_order" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
@@ -315,3 +291,292 @@ resource "aws_lambda_permission" "process_payment" {
 }
 
 data "aws_caller_identity" "current" {}
+
+
+# ============================================
+# EXTENDED SHOP MODULE - Multi-Provider Support
+# ============================================
+
+# Cognito Authorizer for Shop API
+resource "aws_apigatewayv2_authorizer" "cognito" {
+  count = var.cognito_authorizer_id != "" ? 0 : 1
+  
+  api_id           = aws_apigatewayv2_api.shop_api.id
+  authorizer_type  = "JWT"
+  identity_sources = ["$request.header.Authorization"]
+  name             = "${var.project_name}-shop-authorizer"
+
+  jwt_configuration {
+    audience = [var.cognito_client_id]
+    issuer   = "https://cognito-idp.${data.aws_region.current.name}.amazonaws.com/${var.cognito_user_pool_id}"
+  }
+}
+
+data "aws_region" "current" {}
+
+# DynamoDB Table für Shop Settings
+resource "aws_dynamodb_table" "shop_settings" {
+  name         = "${var.project_name}-shop-settings"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "settingKey"
+
+  attribute {
+    name = "settingKey"
+    type = "S"
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  tags = {
+    Name = "${var.project_name}-shop-settings"
+  }
+}
+
+# KMS Key for encrypting payment credentials
+resource "aws_kms_key" "shop_encryption" {
+  description             = "KMS key for shop payment credentials encryption"
+  deletion_window_in_days = 10
+  enable_key_rotation     = true
+
+  tags = {
+    Name = "${var.project_name}-shop-encryption"
+  }
+}
+
+resource "aws_kms_alias" "shop_encryption" {
+  name          = "alias/${var.project_name}-shop-encryption"
+  target_key_id = aws_kms_key.shop_encryption.key_id
+}
+
+# IAM Policy for KMS
+resource "aws_iam_role_policy" "shop_lambda_kms" {
+  name = "kms-access"
+  role = aws_iam_role.shop_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "kms:Decrypt",
+        "kms:Encrypt",
+        "kms:GenerateDataKey"
+      ]
+      Resource = aws_kms_key.shop_encryption.arn
+    }]
+  })
+}
+
+# IAM Policy for SES
+resource "aws_iam_role_policy" "shop_lambda_ses" {
+  name = "ses-access"
+  role = aws_iam_role.shop_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "ses:SendEmail",
+        "ses:SendRawEmail",
+        "ses:SendTemplatedEmail"
+      ]
+      Resource = "*"
+    }]
+  })
+}
+
+# Update DynamoDB policy to include settings table
+resource "aws_iam_role_policy" "shop_lambda_dynamodb_settings" {
+  name = "dynamodb-settings-access"
+  role = aws_iam_role.shop_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem"
+      ]
+      Resource = aws_dynamodb_table.shop_settings.arn
+    }]
+  })
+}
+
+# Lambda Function: Create Order with PayPal
+resource "aws_lambda_function" "create_order_multi" {
+  filename         = "${path.module}/lambda/create-order-paypal.zip"
+  function_name    = "${var.project_name}-shop-create-order-v2"
+  role             = aws_iam_role.shop_lambda.arn
+  handler          = "create-order-paypal.handler"
+  source_code_hash = filebase64sha256("${path.module}/lambda/create-order-paypal.zip")
+  runtime          = "nodejs20.x"
+  timeout          = 30
+
+  environment {
+    variables = {
+      ORDERS_TABLE    = aws_dynamodb_table.orders.name
+      PRODUCTS_TABLE  = aws_dynamodb_table.products.name
+      SETTINGS_TABLE  = aws_dynamodb_table.shop_settings.name
+      FRONTEND_URL    = var.frontend_url
+    }
+  }
+}
+
+# Lambda Function: Verify Payment with PayPal
+resource "aws_lambda_function" "verify_payment" {
+  filename         = "${path.module}/lambda/verify-payment-paypal.zip"
+  function_name    = "${var.project_name}-shop-verify-payment"
+  role             = aws_iam_role.shop_lambda.arn
+  handler          = "verify-payment-paypal.handler"
+  source_code_hash = filebase64sha256("${path.module}/lambda/verify-payment-paypal.zip")
+  runtime          = "nodejs20.x"
+  timeout          = 30
+
+  environment {
+    variables = {
+      ORDERS_TABLE     = aws_dynamodb_table.orders.name
+      SETTINGS_TABLE   = aws_dynamodb_table.shop_settings.name
+      SENDER_EMAIL     = var.sender_email
+      SHOP_OWNER_EMAIL = var.shop_owner_email
+    }
+  }
+}
+
+# Lambda Function: Get Order
+resource "aws_lambda_function" "get_order" {
+  filename         = "${path.module}/lambda/get-order.zip"
+  function_name    = "${var.project_name}-shop-get-order"
+  role             = aws_iam_role.shop_lambda.arn
+  handler          = "get-order.handler"
+  source_code_hash = filebase64sha256("${path.module}/lambda/get-order.zip")
+  runtime          = "nodejs20.x"
+  timeout          = 10
+
+  environment {
+    variables = {
+      ORDERS_TABLE = aws_dynamodb_table.orders.name
+    }
+  }
+}
+
+# Lambda Function: Shop Settings (Admin)
+resource "aws_lambda_function" "shop_settings" {
+  filename         = "${path.module}/lambda/shop-settings.zip"
+  function_name    = "${var.project_name}-shop-settings"
+  role             = aws_iam_role.shop_lambda.arn
+  handler          = "shop-settings.handler"
+  source_code_hash = filebase64sha256("${path.module}/lambda/shop-settings.zip")
+  runtime          = "nodejs20.x"
+  timeout          = 10
+
+  environment {
+    variables = {
+      SETTINGS_TABLE = aws_dynamodb_table.shop_settings.name
+      KMS_KEY_ID     = aws_kms_key.shop_encryption.id
+    }
+  }
+}
+
+# API Gateway Integrations
+resource "aws_apigatewayv2_integration" "create_order_multi" {
+  api_id           = aws_apigatewayv2_api.shop_api.id
+  integration_type = "AWS_PROXY"
+  integration_uri  = aws_lambda_function.create_order_multi.invoke_arn
+}
+
+resource "aws_apigatewayv2_integration" "verify_payment" {
+  api_id           = aws_apigatewayv2_api.shop_api.id
+  integration_type = "AWS_PROXY"
+  integration_uri  = aws_lambda_function.verify_payment.invoke_arn
+}
+
+resource "aws_apigatewayv2_integration" "get_order" {
+  api_id           = aws_apigatewayv2_api.shop_api.id
+  integration_type = "AWS_PROXY"
+  integration_uri  = aws_lambda_function.get_order.invoke_arn
+}
+
+resource "aws_apigatewayv2_integration" "shop_settings" {
+  api_id           = aws_apigatewayv2_api.shop_api.id
+  integration_type = "AWS_PROXY"
+  integration_uri  = aws_lambda_function.shop_settings.invoke_arn
+}
+
+# API Gateway Routes
+# Note: Orders route allows guest checkout (no authentication required)
+resource "aws_apigatewayv2_route" "create_order_v2" {
+  api_id             = aws_apigatewayv2_api.shop_api.id
+  route_key          = "POST /orders"
+  target             = "integrations/${aws_apigatewayv2_integration.create_order_multi.id}"
+  authorization_type = "NONE"
+}
+
+resource "aws_apigatewayv2_route" "verify_payment" {
+  api_id             = aws_apigatewayv2_api.shop_api.id
+  route_key          = "POST /orders/verify"
+  target             = "integrations/${aws_apigatewayv2_integration.verify_payment.id}"
+  authorization_type = var.cognito_user_pool_id != "" ? "JWT" : "NONE"
+  authorizer_id      = var.cognito_user_pool_id != "" ? aws_apigatewayv2_authorizer.cognito[0].id : null
+}
+
+resource "aws_apigatewayv2_route" "get_order" {
+  api_id             = aws_apigatewayv2_api.shop_api.id
+  route_key          = "GET /orders/{orderId}"
+  target             = "integrations/${aws_apigatewayv2_integration.get_order.id}"
+  authorization_type = var.cognito_user_pool_id != "" ? "JWT" : "NONE"
+  authorizer_id      = var.cognito_user_pool_id != "" ? aws_apigatewayv2_authorizer.cognito[0].id : null
+}
+
+resource "aws_apigatewayv2_route" "get_settings" {
+  api_id             = aws_apigatewayv2_api.shop_api.id
+  route_key          = "GET /settings"
+  target             = "integrations/${aws_apigatewayv2_integration.shop_settings.id}"
+  authorization_type = var.cognito_user_pool_id != "" ? "JWT" : "NONE"
+  authorizer_id      = var.cognito_user_pool_id != "" ? aws_apigatewayv2_authorizer.cognito[0].id : null
+}
+
+resource "aws_apigatewayv2_route" "update_settings" {
+  api_id             = aws_apigatewayv2_api.shop_api.id
+  route_key          = "PUT /settings"
+  target             = "integrations/${aws_apigatewayv2_integration.shop_settings.id}"
+  authorization_type = var.cognito_user_pool_id != "" ? "JWT" : "NONE"
+  authorizer_id      = var.cognito_user_pool_id != "" ? aws_apigatewayv2_authorizer.cognito[0].id : null
+}
+
+# Lambda Permissions
+resource "aws_lambda_permission" "create_order_multi" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.create_order_multi.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.shop_api.execution_arn}/*/*"
+}
+
+resource "aws_lambda_permission" "verify_payment" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.verify_payment.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.shop_api.execution_arn}/*/*"
+}
+
+resource "aws_lambda_permission" "get_order" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.get_order.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.shop_api.execution_arn}/*/*"
+}
+
+resource "aws_lambda_permission" "shop_settings" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.shop_settings.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.shop_api.execution_arn}/*/*"
+}

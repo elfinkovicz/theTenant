@@ -1,6 +1,6 @@
 output "website_url" {
   description = "Website URL"
-  value       = "https://${var.website_domain}"
+  value       = "https://${var.domain_name}"
 }
 
 output "s3_bucket_name" {
@@ -97,6 +97,12 @@ output "shop_product_images_bucket" {
   value       = var.enable_shop ? module.shop[0].product_images_bucket : null
 }
 
+# Product Management Outputs
+output "product_api_endpoint" {
+  description = "Product Management API Endpoint (uses Shop API Gateway)"
+  value       = var.enable_product_management && var.enable_shop ? module.shop[0].api_endpoint : null
+}
+
 # Video Management Outputs
 output "video_api_endpoint" {
   description = "Video Management API Endpoint"
@@ -148,4 +154,53 @@ output "team_api_endpoint" {
 output "event_api_endpoint" {
   description = "Event Management API Endpoint"
   value       = var.enable_event_management ? module.user_auth[0].api_endpoint : null
+}
+
+# Channel Management Outputs
+output "channel_api_endpoint" {
+  description = "Channel Management API Endpoint"
+  value       = var.enable_channel_management ? module.user_auth[0].api_endpoint : null
+}
+
+output "channels_table" {
+  description = "Channels DynamoDB Table"
+  value       = var.enable_channel_management ? module.channel_management[0].dynamodb_table_name : null
+}
+
+# Contact Info Management Outputs
+output "contact_info_api_endpoint" {
+  description = "Contact Info Management API Endpoint"
+  value       = var.enable_contact_info_management ? module.user_auth[0].api_endpoint : null
+}
+
+output "contact_info_table" {
+  description = "Contact Info DynamoDB Table"
+  value       = var.enable_contact_info_management ? module.contact_info_management[0].dynamodb_table_name : null
+}
+
+# Legal Management Outputs
+output "legal_api_endpoint" {
+  description = "Legal Documents Management API Endpoint"
+  value       = var.enable_legal_management ? module.user_auth[0].api_endpoint : null
+}
+
+output "legal_docs_table" {
+  description = "Legal Documents DynamoDB Table"
+  value       = var.enable_legal_management ? module.legal_management[0].dynamodb_table_name : null
+}
+
+# Newsfeed Management Outputs
+output "newsfeed_api_endpoint" {
+  description = "Newsfeed Management API Endpoint"
+  value       = var.enable_newsfeed_management ? module.user_auth[0].api_endpoint : null
+}
+
+output "newsfeed_table" {
+  description = "Newsfeed DynamoDB Table"
+  value       = var.enable_newsfeed_management ? module.newsfeed_management[0].dynamodb_table : null
+}
+
+output "newsfeed_media_info" {
+  description = "Newsfeed media werden im Thumbnails-Bucket gespeichert (shared mit Video/Event-Management)"
+  value       = var.enable_newsfeed_management ? "Uses ${module.video_management[0].thumbnails_bucket_name} bucket and ${module.video_management[0].thumbnails_cdn_url} CDN" : null
 }

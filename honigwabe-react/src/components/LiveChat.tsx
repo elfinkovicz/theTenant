@@ -28,8 +28,8 @@ export const LiveChat = ({ isStreamLive }: LiveChatProps) => {
   }, [isStreamLive, isAuthenticated, user])
 
   useEffect(() => {
-    // Auto-scroll zu neuen Nachrichten
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    // Auto-scroll zu neuen Nachrichten (nur innerhalb des Chat-Containers)
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
   }, [messages])
 
   const connectToChat = async () => {
@@ -81,6 +81,7 @@ export const LiveChat = ({ isStreamLive }: LiveChatProps) => {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
+    e.stopPropagation()
     
     if (!newMessage.trim() || !isConnected) return
 
@@ -167,7 +168,7 @@ export const LiveChat = ({ isStreamLive }: LiveChatProps) => {
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-2 min-h-0">
+      <div className="flex-1 overflow-y-auto space-y-2 mb-4 pr-2 min-h-0">
         {messages.length === 0 ? (
           <div className="text-center text-dark-500 py-8">
             <p>Noch keine Nachrichten</p>
@@ -177,17 +178,17 @@ export const LiveChat = ({ isStreamLive }: LiveChatProps) => {
           messages.map((msg) => (
             <div
               key={msg.id}
-              className="bg-dark-800 rounded-lg p-3 hover:bg-dark-750 transition-colors"
+              className="bg-dark-800 rounded px-2 py-1.5 hover:bg-dark-750 transition-colors"
             >
-              <div className="flex items-baseline justify-between mb-1">
-                <span className="text-primary-400 text-sm font-semibold">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-primary-400 text-xs font-semibold">
                   {msg.username}
                 </span>
                 <span className="text-dark-500 text-xs">
                   {formatTime(msg.timestamp)}
                 </span>
               </div>
-              <p className="text-dark-200 break-words">{msg.message}</p>
+              <p className="text-dark-200 text-sm break-words leading-tight mt-0.5">{msg.message}</p>
             </div>
           ))
         )}
@@ -195,17 +196,11 @@ export const LiveChat = ({ isStreamLive }: LiveChatProps) => {
       </div>
 
       {/* Chat Input */}
-      <form onSubmit={handleSendMessage} className="flex gap-2">
+      <form onSubmit={handleSendMessage} className="flex gap-2 flex-shrink-0">
         <input
           type="text"
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              handleSendMessage(e)
-            }
-          }}
           placeholder="Schreibe eine Nachricht..."
           className="input flex-1"
           maxLength={500}
@@ -222,7 +217,7 @@ export const LiveChat = ({ isStreamLive }: LiveChatProps) => {
 
       {/* Connection Status */}
       {isConnected && (
-        <div className="mt-2 text-xs text-center text-green-500 flex items-center justify-center gap-1">
+        <div className="mt-2 text-xs text-center text-green-500 flex items-center justify-center gap-1 flex-shrink-0">
           <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
           Verbunden
         </div>

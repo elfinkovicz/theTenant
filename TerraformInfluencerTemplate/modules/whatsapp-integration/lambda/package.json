@@ -1,0 +1,9 @@
+{
+  "name": "whatsapp-notifier",
+  "version": "1.0.0",
+  "description": "WhatsApp integration for newsfeed posts",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-socialmessaging": "^3.0.0"
+  }
+}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Save } from 'lucide-react';
+import { X, Save, Upload } from 'lucide-react';
 import { Video, videoService } from '../services/video.service';
 
 interface VideoEditModalProps {
@@ -14,6 +14,9 @@ export function VideoEditModal({ isOpen, video, onClose, onSuccess }: VideoEditM
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('Gaming');
   const [status, setStatus] = useState<'draft' | 'published'>('published');
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -25,10 +28,39 @@ export function VideoEditModal({ isOpen, video, onClose, onSuccess }: VideoEditM
       setDescription(video.description || '');
       setCategory(video.category || 'Gaming');
       setStatus(video.status);
+      setThumbnailPreview(video.thumbnailUrl || null);
+      setThumbnailFile(null);
     }
   }, [video]);
 
   if (!isOpen || !video) return null;
+
+  const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Bitte wähle eine Bilddatei');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Thumbnail darf maximal 5MB groß sein');
+      return;
+    }
+
+    setThumbnailFile(file);
+    setError('');
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setThumbnailPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,27 +72,64 @@ export function VideoEditModal({ isOpen, video, onClose, onSuccess }: VideoEditM
 
     setSaving(true);
     setError('');
+    setUploadProgress(0);
 
     try {
+      let thumbnailKey = video.thumbnailKey;
+
+      // Upload new thumbnail if selected
+      if (thumbnailFile) {
+        setUploadProgress(10);
+        
+        // Generate upload URL for thumbnail
+        const uploadData = await videoService.generateUploadUrl(
+          thumbnailFile.name,
+          thumbnailFile.type,
+          'thumbnail',
+          video.videoId
+        );
+
+        setUploadProgress(30);
+
+        // Upload thumbnail to S3
+        await videoService.uploadToS3(
+          uploadData.uploadUrl,
+          thumbnailFile,
+          (progress) => {
+            setUploadProgress(30 + (progress * 0.5)); // 30-80%
+          }
+        );
+
+        thumbnailKey = uploadData.thumbnailKey || null;
+        setUploadProgress(80);
+      }
+
+      // Update video metadata
       await videoService.updateVideo(video.videoId, {
         title: title.trim(),
         description: description.trim(),
         category,
         status,
+        thumbnailKey: thumbnailKey || undefined,
       });
 
+      setUploadProgress(100);
       onSuccess();
       handleClose();
     } catch (err: any) {
       console.error('Update error:', err);
       setError(err.response?.data?.error || 'Aktualisierung fehlgeschlagen');
       setSaving(false);
+      setUploadProgress(0);
     }
   };
 
   const handleClose = () => {
     if (!saving) {
       setError('');
+      setThumbnailFile(null);
+      setThumbnailPreview(null);
+      setUploadProgress(0);
       onClose();
     }
   };
@@ -129,6 +198,43 @@ export function VideoEditModal({ isOpen, video, onClose, onSuccess }: VideoEditM
             </select>
           </div>
 
+          {/* Thumbnail */}
+          <div>
+            <label className="block text-sm font-medium mb-2">Thumbnail</label>
+            
+            {/* Current/Preview Thumbnail */}
+            {thumbnailPreview && (
+              <div className="mb-3 relative">
+                <img
+                  src={thumbnailPreview}
+                  alt="Thumbnail Preview"
+                  className="w-full h-48 object-cover rounded-lg border border-dark-700"
+                />
+                {thumbnailFile && (
+                  <div className="absolute top-2 right-2 bg-primary-600 text-white text-xs px-2 py-1 rounded">
+                    Neu
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Upload Button */}
+            <label className="btn-secondary w-full flex items-center justify-center gap-2 cursor-pointer">
+              <Upload className="w-5 h-5" />
+              {thumbnailFile ? 'Anderes Thumbnail wählen' : 'Thumbnail ändern'}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleThumbnailChange}
+                disabled={saving}
+                className="hidden"
+              />
+            </label>
+            <p className="text-sm text-dark-400 mt-2">
+              Empfohlen: 16:9 Format, max. 5MB
+            </p>
+          </div>
+
           {/* Status */}
           <div>
             <label className="block text-sm font-medium mb-2">Status</label>
@@ -157,6 +263,22 @@ export function VideoEditModal({ isOpen, video, onClose, onSuccess }: VideoEditM
               </label>
             </div>
           </div>
+
+          {/* Upload Progress */}
+          {saving && uploadProgress > 0 && (
+            <div>
+              <div className="flex justify-between text-sm mb-2">
+                <span>Upload-Fortschritt</span>
+                <span>{uploadProgress}%</span>
+              </div>
+              <div className="w-full bg-dark-800 rounded-full h-2 overflow-hidden">
+                <div
+                  className="bg-primary-600 h-full transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Error */}
           {error && (

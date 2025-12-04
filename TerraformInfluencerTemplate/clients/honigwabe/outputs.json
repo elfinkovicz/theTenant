@@ -4,6 +4,16 @@
     "type": "string",
     "value": "admins"
   },
+  "channel_api_endpoint": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://1rhnpplzti.execute-api.eu-central-1.amazonaws.com"
+  },
+  "channels_table": {
+    "sensitive": false,
+    "type": "string",
+    "value": "honigwabe-channels"
+  },
   "cloudfront_distribution_id": {
     "sensitive": false,
     "type": "string",
@@ -29,6 +39,16 @@
     "type": "string",
     "value": "https://q91fu5z277.execute-api.eu-central-1.amazonaws.com"
   },
+  "contact_info_api_endpoint": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://1rhnpplzti.execute-api.eu-central-1.amazonaws.com"
+  },
+  "contact_info_table": {
+    "sensitive": false,
+    "type": "string",
+    "value": "honigwabe-contact-info"
+  },
   "event_api_endpoint": {
     "sensitive": false,
     "type": "string",
@@ -37,7 +57,7 @@
   "event_images_info": {
     "sensitive": false,
     "type": "string",
-    "value": "Uses honigwabe-thumbnails-production bucket and https://d230uf53iuiz3v.cloudfront.net CDN"
+    "value": "Uses honigwabe-thumbnails-production bucket and https://honigwabe-thumbnails-production.s3.eu-central-1.amazonaws.com CDN"
   },
   "events_table": {
     "sensitive": false,
@@ -73,6 +93,36 @@
     "sensitive": true,
     "type": "string",
     "value": "Siehe AWS Console: IVS \u003e Channels \u003e honigwabe-HonigwabeLive \u003e Stream key"
+  },
+  "legal_api_endpoint": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://1rhnpplzti.execute-api.eu-central-1.amazonaws.com"
+  },
+  "legal_docs_table": {
+    "sensitive": false,
+    "type": "string",
+    "value": "honigwabe-legal-docs"
+  },
+  "newsfeed_api_endpoint": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://1rhnpplzti.execute-api.eu-central-1.amazonaws.com"
+  },
+  "newsfeed_media_info": {
+    "sensitive": false,
+    "type": "string",
+    "value": "Uses honigwabe-thumbnails-production bucket and https://honigwabe-thumbnails-production.s3.eu-central-1.amazonaws.com CDN"
+  },
+  "newsfeed_table": {
+    "sensitive": false,
+    "type": "string",
+    "value": "honigwabe-newsfeed"
+  },
+  "product_api_endpoint": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://xd3b0v72nl.execute-api.eu-central-1.amazonaws.com/"
   },
   "s3_bucket_name": {
     "sensitive": false,
@@ -112,7 +162,7 @@
   "team_images_info": {
     "sensitive": false,
     "type": "string",
-    "value": "Uses honigwabe-thumbnails-production bucket and https://d230uf53iuiz3v.cloudfront.net CDN"
+    "value": "Uses honigwabe-thumbnails-production bucket and https://honigwabe-thumbnails-production.s3.eu-central-1.amazonaws.com CDN"
   },
   "team_members_table": {
     "sensitive": false,
@@ -122,7 +172,7 @@
   "thumbnails_cdn_url": {
     "sensitive": false,
     "type": "string",
-    "value": "https://d230uf53iuiz3v.cloudfront.net"
+    "value": "https://honigwabe-thumbnails-production.s3.eu-central-1.amazonaws.com"
   },
   "user_api_endpoint": {
     "sensitive": false,

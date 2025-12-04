@@ -182,45 +182,51 @@ async function generateUploadUrl(event) {
 
   try {
     const body = JSON.parse(event.body || '{}');
-    const { fileName, fileType, contentType } = body;
+    const { fileName, fileType, contentType, videoId: existingVideoId } = body;
 
     if (!fileName || !contentType) {
       return response(400, { error: 'fileName and contentType required' });
     }
 
-    const videoId = uuidv4();
-    const fileExtension = fileName.split('.').pop();
-    const s3Key = `videos/${videoId}.${fileExtension}`;
-
-    // Generate presigned URL for upload (15 minutes)
-    const putObjectCommand = new PutObjectCommand({
-      Bucket: VIDEOS_BUCKET,
-      Key: s3Key,
-      ContentType: contentType
-    });
-    const uploadUrl = await getSignedUrl(s3Client, putObjectCommand, { expiresIn: 900 });
-
-    // Also generate thumbnail upload URL if requested
-    let thumbnailUploadUrl = null;
-    let thumbnailKey = null;
+    // If uploading thumbnail for existing video, use existing videoId
+    // Otherwise generate new videoId for video upload
+    const videoId = (fileType === 'thumbnail' && existingVideoId) ? existingVideoId : uuidv4();
     
+    let uploadUrl, s3Key, thumbnailKey;
+
     if (fileType === 'thumbnail') {
-      thumbnailKey = `thumbnails/${videoId}.jpg`;
+      // Thumbnail upload
+      const fileExtension = fileName.split('.').pop();
+      thumbnailKey = `thumbnails/${videoId}.${fileExtension}`;
       const thumbnailPutCommand = new PutObjectCommand({
         Bucket: THUMBNAILS_BUCKET,
         Key: thumbnailKey,
-        ContentType: 'image/jpeg'
+        ContentType: contentType
       });
-      thumbnailUploadUrl = await getSignedUrl(s3Client, thumbnailPutCommand, { expiresIn: 900 });
-    }
+      uploadUrl = await getSignedUrl(s3Client, thumbnailPutCommand, { expiresIn: 900 });
+      
+      return response(200, {
+        videoId,
+        uploadUrl,
+        thumbnailKey
+      });
+    } else {
+      // Video upload
+      const fileExtension = fileName.split('.').pop();
+      s3Key = `videos/${videoId}.${fileExtension}`;
+      const putObjectCommand = new PutObjectCommand({
+        Bucket: VIDEOS_BUCKET,
+        Key: s3Key,
+        ContentType: contentType
+      });
+      uploadUrl = await getSignedUrl(s3Client, putObjectCommand, { expiresIn: 900 });
 
-    return response(200, {
-      videoId,
-      uploadUrl,
-      s3Key,
-      thumbnailUploadUrl,
-      thumbnailKey
-    });
+      return response(200, {
+        videoId,
+        uploadUrl,
+        s3Key
+      });
+    }
   } catch (error) {
     console.error('Error generating upload URL:', error);
     return response(500, { error: 'Failed to generate upload URL' });
@@ -394,9 +400,14 @@ async function deleteVideo(event) {
 // Main handler
 exports.handler = async (event) => {
   console.log('Event:', JSON.stringify(event, null, 2));
+  console.log('Request Context:', JSON.stringify(event.requestContext, null, 2));
 
-  const method = event.requestContext?.http?.method || event.httpMethod;
-  const path = event.requestContext?.http?.path || event.path;
+  // Support both API Gateway v1 and v2 formats
+  const method = event.requestContext?.http?.method || event.httpMethod || event.requestContext?.httpMethod || event.requestContext?.routeKey?.split(' ')[0];
+  const path = event.requestContext?.http?.path || event.path || event.requestContext?.path || event.rawPath || event.requestContext?.resourcePath;
+  
+  console.log('Detected method:', method);
+  console.log('Detected path:', path);
 
   try {
     // Route requests

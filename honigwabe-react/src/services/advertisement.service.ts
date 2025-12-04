@@ -17,13 +17,14 @@ class AdvertisementService {
       const response = await fetch(`${this.apiUrl}/advertisement`)
       
       if (!response.ok) {
-        throw new Error('Failed to fetch advertisement')
+        console.warn('Advertisement API not yet deployed')
+        return null
       }
 
       const data = await response.json()
       return data.advertisement
     } catch (error) {
-      console.error('Error fetching advertisement:', error)
+      console.warn('Advertisement API not available:', error)
       return null
     }
   }

@@ -11,6 +11,14 @@ interface VideoCardProps {
 
 export function VideoCard({ video, onEdit, onDelete, onClick }: VideoCardProps) {
   const { isAdmin } = useAdmin();
+  
+  // Debug logging
+  console.log('VideoCard render:', {
+    title: video.title,
+    thumbnailKey: video.thumbnailKey,
+    thumbnailUrl: video.thumbnailUrl,
+    hasThumbnail: !!video.thumbnailUrl
+  });
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -50,12 +58,19 @@ export function VideoCard({ video, onEdit, onDelete, onClick }: VideoCardProps) 
             src={video.thumbnailUrl}
             alt={video.title}
             className="w-full h-full object-cover"
+            onError={(e) => {
+              console.error('Thumbnail load error:', video.thumbnailUrl);
+              e.currentTarget.style.display = 'none';
+              const fallback = e.currentTarget.parentElement?.querySelector('.fallback-icon');
+              if (fallback) {
+                fallback.classList.remove('hidden');
+              }
+            }}
           />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Play className="w-16 h-16 text-dark-600" />
-          </div>
-        )}
+        ) : null}
+        <div className={`absolute inset-0 bg-gradient-to-br from-primary-900/20 to-dark-900 flex items-center justify-center ${video.thumbnailUrl ? 'hidden fallback-icon' : ''}`}>
+          <Play className="w-16 h-16 text-dark-600" />
+        </div>
         
         {/* Duration Badge */}
         {video.duration > 0 && (

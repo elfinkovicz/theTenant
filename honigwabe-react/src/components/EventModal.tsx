@@ -18,6 +18,7 @@ export function EventModal({ isOpen, onClose, onSuccess, event, mode }: EventMod
   const [eventDate, setEventDate] = useState('');
   const [eventTime, setEventTime] = useState('');
   const [location, setLocation] = useState('');
+  const [locationUrl, setLocationUrl] = useState('');
   const [ticketUrl, setTicketUrl] = useState('');
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
@@ -29,6 +30,7 @@ export function EventModal({ isOpen, onClose, onSuccess, event, mode }: EventMod
       setEventDate(event.eventDate);
       setEventTime(event.eventTime || '');
       setLocation(event.location || '');
+      setLocationUrl(event.locationUrl || '');
       setTicketUrl(event.ticketUrl || '');
       if (event.imageUrl) {
         setImagePreview(event.imageUrl);
@@ -85,6 +87,7 @@ export function EventModal({ isOpen, onClose, onSuccess, event, mode }: EventMod
         eventDate,
         eventTime: eventTime.trim() || undefined,
         location: location.trim() || undefined,
+        locationUrl: locationUrl.trim() || undefined,
         ticketUrl: ticketUrl.trim() || undefined,
         imageKey,
         status: 'published' // Immer veröffentlicht
@@ -114,6 +117,7 @@ export function EventModal({ isOpen, onClose, onSuccess, event, mode }: EventMod
       setEventDate('');
       setEventTime('');
       setLocation('');
+      setLocationUrl('');
       setTicketUrl('');
       setError('');
       onClose();
@@ -230,17 +234,31 @@ export function EventModal({ isOpen, onClose, onSuccess, event, mode }: EventMod
           </div>
 
           {/* Location */}
-          <div>
-            <label className="block text-sm font-medium mb-2">Ort</label>
-            <input
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              disabled={uploading}
-              placeholder="Event-Location"
-              className="input w-full disabled:opacity-50"
-              maxLength={200}
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Ort</label>
+              <input
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                disabled={uploading}
+                placeholder="z.B. Berlin, Deutschland"
+                className="input w-full disabled:opacity-50"
+                maxLength={200}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2">Google Maps Link</label>
+              <input
+                type="url"
+                value={locationUrl}
+                onChange={(e) => setLocationUrl(e.target.value)}
+                disabled={uploading}
+                placeholder="https://maps.google.com/..."
+                className="input w-full disabled:opacity-50"
+              />
+              <p className="text-sm text-dark-400 mt-1">Für Wegbeschreibung</p>
+            </div>
           </div>
 
           {/* Ticket URL */}

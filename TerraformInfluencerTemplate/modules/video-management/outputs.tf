@@ -14,8 +14,13 @@ output "thumbnails_bucket_name" {
 }
 
 output "thumbnails_cdn_url" {
-  description = "CloudFront CDN URL for thumbnails"
-  value       = "https://${aws_cloudfront_distribution.thumbnails.domain_name}"
+  description = "S3 URL for thumbnails (public)"
+  value       = "https://${aws_s3_bucket.thumbnails.bucket_regional_domain_name}"
+}
+
+output "thumbnails_bucket_domain" {
+  description = "S3 bucket regional domain name for CloudFront origin"
+  value       = aws_s3_bucket.thumbnails.bucket_regional_domain_name
 }
 
 output "video_api_lambda_arn" {

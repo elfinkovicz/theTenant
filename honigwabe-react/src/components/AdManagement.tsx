@@ -55,7 +55,10 @@ export const AdManagement = ({ onClose }: AdManagementProps) => {
   }
 
   const handleSave = async () => {
-    if (!accessToken) return
+    if (!accessToken) {
+      alert('Nicht eingeloggt. Bitte melde dich als Admin an.')
+      return
+    }
 
     setSaving(true)
     try {
@@ -63,12 +66,28 @@ export const AdManagement = ({ onClose }: AdManagementProps) => {
 
       // Upload new image if selected
       if (imageFile) {
-        const { imageKey: newImageKey } = await advertisementService.uploadImage(imageFile, accessToken)
-        imageKey = newImageKey
+        try {
+          const { imageKey: newImageKey } = await advertisementService.uploadImage(imageFile, accessToken)
+          imageKey = newImageKey
+        } catch (uploadError: any) {
+          console.error('Upload error:', uploadError)
+          if (uploadError.message.includes('401') || uploadError.message.includes('403')) {
+            alert('Keine Berechtigung. Bitte stelle sicher, dass du als Admin eingeloggt bist.')
+          } else {
+            alert(`Fehler beim Hochladen: ${uploadError.message}`)
+          }
+          setSaving(false)
+          return
+        }
       } else if (!imagePreview && ad?.imageKey) {
         // Delete image if removed
-        await advertisementService.deleteImage(accessToken)
-        imageKey = null
+        try {
+          await advertisementService.deleteImage(accessToken)
+          imageKey = null
+        } catch (deleteError) {
+          console.warn('Could not delete old image:', deleteError)
+          // Continue anyway
+        }
       }
 
       // Update advertisement
@@ -80,9 +99,13 @@ export const AdManagement = ({ onClose }: AdManagementProps) => {
 
       alert('Werbebanner erfolgreich aktualisiert!')
       onClose()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save advertisement:', error)
-      alert('Fehler beim Speichern')
+      if (error.message.includes('401') || error.message.includes('403')) {
+        alert('Keine Berechtigung. Bitte stelle sicher, dass du in der "admins" Gruppe bist.')
+      } else {
+        alert(`Fehler beim Speichern: ${error.message}`)
+      }
     } finally {
       setSaving(false)
     }

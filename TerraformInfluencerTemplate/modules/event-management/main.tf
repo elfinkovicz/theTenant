@@ -110,7 +110,7 @@ resource "aws_lambda_function" "event_api" {
   role            = aws_iam_role.event_lambda.arn
   handler         = "index.handler"
   source_code_hash = data.archive_file.event_lambda.output_base64sha256
-  runtime         = "nodejs18.x"
+  runtime         = "nodejs20.x"
   timeout         = 30
 
   environment {

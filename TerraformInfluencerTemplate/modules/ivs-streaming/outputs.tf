@@ -28,3 +28,18 @@ output "recordings_bucket" {
   description = "S3 Bucket für Aufnahmen"
   value       = aws_s3_bucket.recordings.id
 }
+
+output "stream_status_lambda_arn" {
+  description = "Stream Status Lambda Function ARN"
+  value       = aws_lambda_function.stream_status.arn
+}
+
+output "stream_status_lambda_name" {
+  description = "Stream Status Lambda Function Name"
+  value       = aws_lambda_function.stream_status.function_name
+}
+
+output "stream_status_lambda_invoke_arn" {
+  description = "Stream Status Lambda Invoke ARN"
+  value       = aws_lambda_function.stream_status.invoke_arn
+}

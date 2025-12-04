@@ -225,6 +225,20 @@ def prepare_lambda_functions():
             log_info("Fahre trotzdem fort - Terraform wird Lambda-Pakete erstellen")
     else:
         log_warning("prepare_lambdas.py nicht gefunden - überspringe")
+    
+    # Stream Restreaming Lambda ZIP erstellen
+    log_info("Erstelle Stream Restreaming Lambda ZIP...")
+    restreaming_lambda_dir = Path(config.TERRAFORM_DIR) / "modules" / "stream-restreaming" / "lambda"
+    if restreaming_lambda_dir.exists():
+        try:
+            import zipfile
+            zip_path = restreaming_lambda_dir.parent / "lambda.zip"
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                zipf.write(restreaming_lambda_dir / "index.py", "index.py")
+            log_success("Stream Restreaming Lambda ZIP erstellt")
+        except Exception as e:
+            log_error(f"Fehler beim Erstellen des Lambda ZIP: {e}")
+            raise
 
 
 def generate_terraform_configs():
@@ -259,8 +273,11 @@ enable_sponsor_system = {str(config.ENABLE_SPONSOR_SYSTEM).lower()}
 enable_shop           = {str(config.ENABLE_SHOP).lower()}
 enable_video_management = {str(config.ENABLE_VIDEO_MANAGEMENT).lower()}
 enable_team_management  = {str(config.ENABLE_TEAM_MANAGEMENT).lower()}
-enable_event_management = {str(config.ENABLE_EVENT_MANAGEMENT).lower()}
-enable_ad_management    = {str(config.ENABLE_AD_MANAGEMENT).lower()}
+enable_event_management    = {str(config.ENABLE_EVENT_MANAGEMENT).lower()}
+enable_ad_management       = {str(config.ENABLE_AD_MANAGEMENT).lower()}
+enable_hero_management     = {str(config.ENABLE_HERO_MANAGEMENT).lower()}
+enable_product_management  = {str(config.ENABLE_PRODUCT_MANAGEMENT).lower()}
+enable_stream_restreaming  = {str(config.ENABLE_STREAM_RESTREAMING).lower()}
 
 ivs_channel_name = "{config.IVS_CHANNEL_NAME}"
 ivs_channel_type = "{config.IVS_CHANNEL_TYPE}"
@@ -407,6 +424,18 @@ VITE_EVENT_API_URL={get_terraform_output("user_api_endpoint")}
 
 # IVS Chat API
 VITE_CHAT_API_URL={get_terraform_output("ivs_chat_api_endpoint")}
+
+# Product Management API (uses Shop API Gateway)
+VITE_PRODUCT_API_URL={get_terraform_output("product_api_endpoint")}
+
+# Channel Management API (uses same API Gateway as User API)
+VITE_CHANNEL_API_URL={get_terraform_output("channel_api_endpoint")}
+
+# Contact Info Management API (uses same API Gateway as User API)
+VITE_CONTACT_INFO_API_URL={get_terraform_output("contact_info_api_endpoint")}
+
+# Legal Management API (uses same API Gateway as User API)
+VITE_LEGAL_API_URL={get_terraform_output("legal_api_endpoint")}
 '''
     
     (frontend_dir / ".env").write_text(env_content)

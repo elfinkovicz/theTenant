@@ -10,6 +10,7 @@ export interface Event {
   eventDate: string;
   eventTime?: string;
   location?: string;
+  locationUrl?: string;
   imageKey?: string;
   imageUrl?: string;
   ticketUrl?: string;
@@ -24,6 +25,7 @@ export interface CreateEventData {
   eventDate: string;
   eventTime?: string;
   location?: string;
+  locationUrl?: string;
   imageKey?: string;
   ticketUrl?: string;
   status?: 'draft' | 'published';

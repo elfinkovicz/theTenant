@@ -9,28 +9,25 @@ export interface StreamStatus {
 class StreamService {
   /**
    * Prüft den Stream-Status über AWS IVS
-   * Hinweis: Dies erfordert einen Backend-Endpoint, da IVS API-Aufrufe
-   * AWS-Credentials benötigen, die nicht im Frontend sein sollten.
+   * Holt Viewer Count vom Backend
    */
   async getStreamStatus(): Promise<StreamStatus> {
     try {
-      // TODO: Backend-Endpoint erstellen für Stream-Status
-      // Für jetzt: Versuche den Stream zu laden und prüfe ob er verfügbar ist
-      await fetch(awsConfig.ivs.playbackUrl, {
-        method: 'HEAD',
-        mode: 'no-cors'
-      })
-      
-      // Da no-cors keine Response-Details liefert, nehmen wir an der Stream ist live
-      // wenn die URL erreichbar ist
+      const response = await fetch(`${awsConfig.api.user}/stream/status`)
+      if (!response.ok) {
+        throw new Error('Failed to get stream status')
+      }
+      const data = await response.json()
       return {
-        isLive: true,
-        viewerCount: 0
+        isLive: data.isLive || false,
+        viewerCount: data.viewerCount || 0,
+        startTime: data.startTime
       }
     } catch (error) {
       console.error('Stream status check failed:', error)
       return {
-        isLive: false
+        isLive: false,
+        viewerCount: 0
       }
     }
   }

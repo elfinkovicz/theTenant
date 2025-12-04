@@ -59,6 +59,8 @@ class VideoService {
   // Public: Get all published videos
   async getVideos(): Promise<Video[]> {
     const response = await axios.get(`${API_BASE_URL}/videos`);
+    console.log('Videos API Response:', response.data);
+    console.log('First video thumbnailUrl:', response.data.videos[0]?.thumbnailUrl);
     return response.data.videos;
   }
 
@@ -69,14 +71,14 @@ class VideoService {
   }
 
   // Admin: Generate upload URL
-  async generateUploadUrl(fileName: string, contentType: string, fileType: 'video' | 'thumbnail' = 'video'): Promise<UploadUrlResponse> {
-    console.log('Generating upload URL:', { fileName, contentType, fileType, apiUrl: API_BASE_URL });
+  async generateUploadUrl(fileName: string, contentType: string, fileType: 'video' | 'thumbnail' = 'video', videoId?: string): Promise<UploadUrlResponse> {
+    console.log('Generating upload URL:', { fileName, contentType, fileType, videoId, apiUrl: API_BASE_URL });
     const headers = this.getAuthHeaders();
     console.log('Auth headers:', headers);
     
     const response = await axios.post(
       `${API_BASE_URL}/videos/upload-url`,
-      { fileName, contentType, fileType },
+      { fileName, contentType, fileType, videoId },
       { headers }
     );
     console.log('Upload URL response:', response.data);

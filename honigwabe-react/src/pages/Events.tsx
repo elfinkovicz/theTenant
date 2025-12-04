@@ -3,12 +3,14 @@ import { motion } from 'framer-motion'
 import { Calendar, MapPin, Clock, Ticket, Plus, Edit, Trash2 } from 'lucide-react'
 import { eventService, Event } from '../services/event.service'
 import { EventModal } from '../components/EventModal'
+import { EventDetailModal } from '../components/EventDetailModal'
 import { useAdmin } from '../hooks/useAdmin'
 
 export const Events = () => {
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create')
   const { isAdmin } = useAdmin()
@@ -35,13 +37,20 @@ export const Events = () => {
     setIsModalOpen(true)
   }
 
-  const handleEdit = (event: Event) => {
+  const handleEdit = (event: Event, e: React.MouseEvent) => {
+    e.stopPropagation()
     setSelectedEvent(event)
     setModalMode('edit')
     setIsModalOpen(true)
   }
 
-  const handleDelete = async (event: Event) => {
+  const handleViewDetails = (event: Event) => {
+    setSelectedEvent(event)
+    setIsDetailModalOpen(true)
+  }
+
+  const handleDelete = async (event: Event, e: React.MouseEvent) => {
+    e.stopPropagation()
     if (!confirm(`Event "${event.title}" wirklich löschen?`)) return
 
     try {
@@ -112,19 +121,20 @@ export const Events = () => {
               <motion.div
                 key={event.eventId}
                 whileHover={{ y: -5 }}
-                className="card relative overflow-hidden"
+                onClick={() => handleViewDetails(event)}
+                className="card relative overflow-hidden cursor-pointer"
               >
                 {/* Admin Actions */}
                 {isAdmin && (
                   <div className="absolute top-4 right-4 flex gap-2 z-10">
                     <button
-                      onClick={() => handleEdit(event)}
+                      onClick={(e) => handleEdit(event, e)}
                       className="p-2 rounded-lg bg-dark-800 hover:bg-primary-600 transition-colors"
                     >
                       <Edit size={16} />
                     </button>
                     <button
-                      onClick={() => handleDelete(event)}
+                      onClick={(e) => handleDelete(event, e)}
                       className="p-2 rounded-lg bg-dark-800 hover:bg-red-600 transition-colors"
                     >
                       <Trash2 size={16} />
@@ -191,13 +201,20 @@ export const Events = () => {
         )}
       </div>
 
-      {/* Modal */}
+      {/* Edit Modal */}
       <EventModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={loadEvents}
         event={selectedEvent}
         mode={modalMode}
+      />
+
+      {/* Detail Modal */}
+      <EventDetailModal
+        event={selectedEvent}
+        isOpen={isDetailModalOpen}
+        onClose={() => setIsDetailModalOpen(false)}
       />
     </div>
   )
