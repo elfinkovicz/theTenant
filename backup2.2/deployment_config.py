@@ -4,6 +4,18 @@ Deployment Configuration für Creator Platform
 Passe die Werte in der Config-Klasse an und führe deploy.py aus
 """
 
+import os
+from pathlib import Path
+
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    env_path = Path(__file__).parent.parent / '.env'
+    load_dotenv(dotenv_path=env_path)
+except ImportError:
+    # python-dotenv not installed, will use system environment variables
+    pass
+
 class DeploymentConfig:
     """Zentrale Deployment-Konfiguration"""
     
