@@ -30,6 +30,11 @@ resource "aws_cognito_user_pool" "main" {
       priority = 1
     }
   }
+
+  # Lambda Trigger: Post-Confirmation
+  lambda_config {
+    post_confirmation = aws_lambda_function.post_confirmation.arn
+  }
 }
 
 # Cognito User Pool Client
@@ -50,6 +55,17 @@ resource "aws_cognito_user_pool_client" "main" {
     "ALLOW_REFRESH_TOKEN_AUTH",
     "ALLOW_USER_SRP_AUTH"
   ]
+  
+  # Token-Lebensdauer: 1 Stunde
+  access_token_validity  = 60  # Minuten
+  id_token_validity      = 60  # Minuten
+  refresh_token_validity = 30  # Tage
+  
+  token_validity_units {
+    access_token  = "minutes"
+    id_token      = "minutes"
+    refresh_token = "days"
+  }
 }
 
 # Cognito Domain
@@ -247,6 +263,78 @@ data "archive_file" "auth_lambda" {
   }
 }
 
+# Post-Confirmation Lambda (speichert User in DynamoDB)
+resource "aws_iam_role" "post_confirmation_lambda" {
+  name = "${var.project_name}-post-confirmation-lambda"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "post_confirmation_lambda_basic" {
+  role       = aws_iam_role.post_confirmation_lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "post_confirmation_lambda_dynamodb" {
+  name = "dynamodb-write-access"
+  role = aws_iam_role.post_confirmation_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "dynamodb:PutItem"
+      ]
+      Resource = aws_dynamodb_table.users.arn
+    }]
+  })
+}
+
+resource "aws_lambda_function" "post_confirmation" {
+  filename         = data.archive_file.post_confirmation_lambda.output_path
+  function_name    = "${var.project_name}-post-confirmation"
+  role             = aws_iam_role.post_confirmation_lambda.arn
+  handler          = "post-confirmation.handler"
+  source_code_hash = data.archive_file.post_confirmation_lambda.output_base64sha256
+  runtime          = "nodejs20.x"
+  timeout          = 10
+
+  environment {
+    variables = {
+      USER_TABLE_NAME = aws_dynamodb_table.users.name
+    }
+  }
+}
+
+data "archive_file" "post_confirmation_lambda" {
+  type        = "zip"
+  output_path = "${path.module}/post-confirmation-lambda.zip"
+
+  source {
+    content  = file("${path.module}/lambda/post-confirmation.js")
+    filename = "post-confirmation.js"
+  }
+}
+
+# Lambda Permission für Cognito Trigger
+resource "aws_lambda_permission" "cognito_post_confirmation" {
+  statement_id  = "AllowCognitoInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.post_confirmation.function_name
+  principal     = "cognito-idp.amazonaws.com"
+  source_arn    = aws_cognito_user_pool.main.arn
+}
+
 # Auth API Gateway Integration
 resource "aws_apigatewayv2_integration" "auth" {
   api_id           = aws_apigatewayv2_api.user_api.id
@@ -282,6 +370,18 @@ resource "aws_apigatewayv2_route" "resend_code" {
 resource "aws_apigatewayv2_route" "get_me" {
   api_id    = aws_apigatewayv2_api.user_api.id
   route_key = "GET /me"
+  target    = "integrations/${aws_apigatewayv2_integration.auth.id}"
+}
+
+resource "aws_apigatewayv2_route" "forgot_password" {
+  api_id    = aws_apigatewayv2_api.user_api.id
+  route_key = "POST /forgot-password"
+  target    = "integrations/${aws_apigatewayv2_integration.auth.id}"
+}
+
+resource "aws_apigatewayv2_route" "confirm_forgot_password" {
+  api_id    = aws_apigatewayv2_api.user_api.id
+  route_key = "POST /confirm-forgot-password"
   target    = "integrations/${aws_apigatewayv2_integration.auth.id}"
 }
 

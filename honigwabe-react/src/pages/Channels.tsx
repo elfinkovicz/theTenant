@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { ExternalLink, Users, Youtube, Twitch, Instagram, Facebook, Twitter, Linkedin, Music, Radio, Mic, Video, DollarSign, Gamepad2, MessageCircle, Mail, ShoppingBag, Settings } from 'lucide-react'
+import { ExternalLink, Youtube, Twitch, Instagram, Facebook, Twitter, Linkedin, Music, Radio, Mic, Video, DollarSign, Gamepad2, MessageCircle, Mail, ShoppingBag, Settings } from 'lucide-react'
 import { SocialChannel, channelService } from '../services/channel.service'
 import { ChannelManagementModal } from '../components/ChannelManagementModal'
 import { useAdmin } from '../hooks/useAdmin'
@@ -238,68 +238,58 @@ export const Channels = () => {
               {category.name}
             </h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
               {category.channels.map((channel) => (
                 <motion.a
                   key={channel.id}
                   href={channel.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  whileHover={{ y: -5, scale: 1.02 }}
-                  className="card group cursor-pointer relative overflow-hidden"
-                  style={{
-                    borderColor: `${channel.color}20`,
-                  }}
+                  whileHover={{ y: -3, scale: 1.05 }}
+                  className="group cursor-pointer relative overflow-hidden bg-dark-900/50 backdrop-blur-sm rounded-xl border border-dark-800 hover:border-primary-500/50 transition-all p-4"
                 >
                   {/* Color accent bar */}
                   <div 
-                    className="absolute top-0 left-0 right-0 h-1"
+                    className="absolute top-0 left-0 right-0 h-0.5"
                     style={{ backgroundColor: channel.color }}
                   />
 
                   {/* Icon */}
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="flex flex-col items-center text-center gap-3">
                     <div 
                       className="transition-transform group-hover:scale-110"
                       style={{ 
                         color: channel.color,
-                        filter: `drop-shadow(0 0 10px ${channel.color}40)`
+                        filter: `drop-shadow(0 0 8px ${channel.color}30)`
                       }}
                     >
-                      {getPlatformIcon(channel.iconType)}
+                      <div className="scale-75">
+                        {getPlatformIcon(channel.iconType)}
+                      </div>
                     </div>
+
+                    {/* Platform name */}
+                    <div className="w-full">
+                      <h3 className="text-base font-bold mb-1 group-hover:text-primary-400 transition-colors truncate">
+                        {channel.platform}
+                      </h3>
+                      
+                      {/* Handle */}
+                      <p className="text-dark-400 text-xs font-mono truncate">
+                        {channel.name}
+                      </p>
+                    </div>
+
+                    {/* External link icon */}
                     <ExternalLink 
-                      size={20} 
-                      className="text-dark-500 group-hover:text-primary-500 transition-colors"
+                      size={16} 
+                      className="text-dark-600 group-hover:text-primary-500 transition-colors absolute top-3 right-3"
                     />
-                  </div>
-
-                  {/* Platform name */}
-                  <h3 className="text-xl font-bold mb-1 group-hover:text-primary-400 transition-colors">
-                    {channel.platform}
-                  </h3>
-                  
-                  {/* Handle */}
-                  <p className="text-dark-400 text-sm mb-3 font-mono">
-                    {channel.name}
-                  </p>
-
-                  {/* Description */}
-                  <p className="text-dark-500 text-sm mb-4 line-clamp-2">
-                    {channel.description}
-                  </p>
-
-                  {/* Followers */}
-                  <div className="flex items-center gap-2 text-sm">
-                    <Users size={16} className="text-primary-500" />
-                    <span className="text-dark-400">
-                      <span className="font-semibold text-white">{channel.followers}</span> followers
-                    </span>
                   </div>
 
                   {/* Hover effect */}
                   <div 
-                    className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity pointer-events-none"
+                    className="absolute inset-0 opacity-0 group-hover:opacity-5 transition-opacity pointer-events-none"
                     style={{ backgroundColor: channel.color }}
                   />
                 </motion.a>

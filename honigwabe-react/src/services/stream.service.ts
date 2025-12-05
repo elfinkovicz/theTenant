@@ -1,9 +1,16 @@
 import { awsConfig } from '../config/aws-config'
+import { heroService } from './hero.service'
+import { useAuthStore } from '../store/authStore'
 
 export interface StreamStatus {
   isLive: boolean
   viewerCount?: number
   startTime?: string
+}
+
+export interface StreamInfo {
+  title: string
+  description: string
 }
 
 class StreamService {
@@ -68,6 +75,39 @@ class StreamService {
 
   getChatRoomArn(): string {
     return awsConfig.ivs.chatRoomArn
+  }
+
+  /**
+   * Get stream info (title, description) from backend
+   */
+  async getStreamInfo(): Promise<StreamInfo> {
+    try {
+      const heroContent = await heroService.getHeroContent()
+      return {
+        title: heroContent.streamTitle || 'Live Stream',
+        description: heroContent.streamDescription || 'Welcome to the stream!'
+      }
+    } catch (error) {
+      console.error('Failed to load stream info:', error)
+      return {
+        title: 'Live Stream',
+        description: 'Welcome to the stream!'
+      }
+    }
+  }
+
+  /**
+   * Update stream info (title, description) in backend
+   */
+  async updateStreamInfo(info: StreamInfo): Promise<void> {
+    const token = useAuthStore.getState().accessToken
+    if (!token) {
+      throw new Error('Not authenticated')
+    }
+    await heroService.updateHeroContent({
+      streamTitle: info.title,
+      streamDescription: info.description
+    }, token)
   }
 }
 

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Stream - Creator Platform</title>
+    <link rel="stylesheet" href="../src/css/styles.css">
+    <link rel="stylesheet" href="../src/css/live.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+    
+
+    <header class="header">
+        <div class="container">
+            <a href="index.html" class="logo">
+                <div class="hexagon-logo">
+                    <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                        <path d="M20 2L35 11V29L20 38L5 29V11L20 2Z" fill="#FFC400"/>
+                        <circle cx="20" cy="20" r="8" fill="#111111"/>
+                    </svg>
+                </div>
+                <span>Creator Platform</span>
+            </a>
+            <nav class="nav">
+                <a href="index.html">Home</a>
+                <a href="team.html">Team</a>
+                <a href="kanaele.html">Kanäle</a>
+                <a href="live.html" style="color: #FF0000; font-weight: 800;">🔴 Live</a>
+                <a href="exklusiv.html">🔒 Exklusiv</a>
+                <a href="events.html">Events</a>
+                <a href="shop.html">Shop</a>
+                <a href="kontakt.html">Kontakt</a>
+            </nav>
+            <div class="header-auth" id="headerAuth">
+                <a href="login.html" class="auth-link"><i class="fas fa-sign-in-alt"></i> Login</a>
+                <a href="register.html" class="btn btn-primary btn-sm"><i class="fas fa-user-plus"></i> Registrieren</a>
+            </div>
+            <button class="mobile-menu-btn">☰</button>
+        </div>
+    </header>
+
+    <main style="padding: 0; margin: 0; width: 100%;">
+        <div class="container" style="padding: 2rem 20px;">
+            <div class="live-header-wrapper">
+                <!-- Countdown Box (Links) -->
+                <div class="countdown-box" id="countdownBox">
+                    <div class="countdown-icon">⏰</div>
+                    <div class="countdown-label">Nächster Stream</div>
+                    <div class="countdown-time" id="countdownTime">Lädt...</div>
+                    <div class="countdown-date" id="countdownDate">Sonntag 18:00</div>
+                </div>
+
+                <!-- Live Header (Mitte/Rechts) -->
+                <div class="live-header">
+                    <h1>
+                        <span class="live-indicator">🔴 LIVE</span>
+                        Creator Platform Stream
+                    </h1>
+                    <p class="live-subtitle">
+                        Der Podcast für Connaisseure und Connaisseusen der Avocado.<br>
+                        Das Original immer Sonntags um 18:00 Uhr LIVE auf 
+                        <a href="https://www.twitch.tv/kasperkast" target="_blank">Twitch</a>, 
+                        <a href="https://www.youtube.com/@KasperKastnofiltr" target="_blank">YouTube</a> und 
+                        <a href="https://rumble.com/user/KasperKast" target="_blank">Rumble</a>.<br>
+                        Weitere Informationen: <a href="https://campsite.bio/honigwabe" target="_blank">campsite.bio/honigwabe</a>
+                    </p>
+                    
+                    <div class="donate-container">
+                        <button class="btn btn-primary donate-btn">🍯 Unterstütze uns</button>
+                        <a href="sponsor-booking.html" class="btn btn-secondary donate-btn">
+                            📢 Werde Sponsor der Woche
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sponsor Banner Top (Über Video) -->
+        <div class="sponsor-banner sponsor-top" id="sponsorTop">
+            <div class="sponsor-content">
+                <div class="sponsor-placeholder">
+                    <i class="fas fa-bullhorn"></i>
+                    <span class="placeholder-text">Premium Werbeplatz - 199€/Woche</span>
+                    <a href="sponsor-booking.html" class="placeholder-link">Jetzt buchen</a>
+                </div>
+                <a href="#" target="_blank" id="sponsorTopLink" class="sponsor-link" style="display: none;">
+                    <img src="" alt="Sponsor" id="sponsorTopImage" class="sponsor-image">
+                </a>
+            </div>
+        </div>
+
+        <!-- Main Layout Container -->
+        <div class="main-layout">
+            <!-- Center Content (Video + Chat nebeneinander) -->
+            <div class="center-content">
+                <!-- Video Section -->
+                <div class="video-section">
+                    <!-- Werbevideo Container -->
+                    <div id="adContainer" class="ad-container">
+                        <video id="adVideo" class="ad-video" autoplay>
+                            <source src="https://www.silent-basis.pro/301305/351511/807108_61a5b.mp4" type="video/mp4">
+                            <source src="https://www.silent-basis.pro/301305/351511/807108_61a5bz.webm" type="video/webm">
+                            Ihr Browser unterstützt das Video-Element nicht.
+                        </video>
+                        <div class="ad-overlay">
+                            <div class="ad-countdown">
+                                Stream startet in: <span id="countdownTimer">15</span>s
+                            </div>
+                            <div class="ad-controls">
+                                <button class="mute-btn" id="muteBtn" title="Ton ein/aus">
+                                    <svg id="muteIcon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                                        <line x1="23" y1="9" x2="17" y2="15"/>
+                                        <line x1="17" y1="9" x2="23" y2="15"/>
+                                    </svg>
+                                </button>
+                                <button class="skip-ad-btn" id="skipAdBtn">Werbung überspringen</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hauptvideo Container -->
+                    <div id="videoContainer" class="video-container hidden">
+                        <div class="loading-spinner">
+                            <div class="hexagon-loader"></div>
+                            <p>Stream wird geladen...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chat Section (neben Video) -->
+                <div class="chat-section">
+                    <div class="chat-header">
+                        <span>🍯 Live Chat 🍯</span>
+                    </div>
+                    <div id="messages" class="chat-messages"></div>
+                    <div class="chat-input-area">
+                        <input type="text" id="chatInput" placeholder="Schreibe eine Nachricht...">
+                        <button id="sendBtn" class="btn btn-primary">Senden</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sponsor Banner Bottom (Breiter Banner) -->
+        <div class="sponsor-banner sponsor-bottom" id="sponsorBottom">
+            <div class="sponsor-content">
+                <div class="sponsor-placeholder">
+                    <i class="fas fa-bullhorn"></i>
+                    <span class="placeholder-text">Werbeplatz verfügbar - 129€/Woche</span>
+                    <a href="sponsor-booking.html" class="placeholder-link">Jetzt buchen</a>
+                </div>
+                <a href="#" target="_blank" id="sponsorBottomLink" class="sponsor-link" style="display: none;">
+                    <img src="" alt="Sponsor" id="sponsorBottomImage" class="sponsor-image">
+                </a>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-logo">
+                    <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
+                        <path d="M15 2L27 9V21L15 28L3 21V9L15 2Z" fill="#FFC400"/>
+                    </svg>
+                    <span>Creator Platform</span>
+                </div>
+                <div class="footer-links">
+                    <a href="impressum.html">Impressum</a>
+                    <a href="datenschutz.html">Datenschutz</a>
+                    <a href="kontakt.html">Kontakt</a>
+                </div>
+                <div class="footer-social">
+                    <a href="#">YT</a>
+                    <a href="#">X</a>
+                    <a href="#">TG</a>
+                </div>
+            </div>
+            <p class="footer-copyright">© 2024 Creator Platform. Alle Rechte vorbehalten.</p>
+        </div>
+    </footer>
+
+    <script src="config/config.js"></script>
+    <script src="../src/js/main.js"></script>
+    <script src="../src/js/live/ad-manager.js"></script>
+    <script src="../src/js/live/video-player.js"></script>
+    <script src="../src/js/live/chat.js"></script>
+    <script src="../src/js/live/sponsor-loader.js"></script>
+    <script src="../src/js/live/app.js"></script>
+    <script>
+        // Countdown für Live-Seite
+        function updateCountdown() {
+            const now = new Date();
+            const dayOfWeek = now.getDay();
+            const currentHour = now.getHours();
+            
+            let nextStream = new Date(now);
+            
+            // Wenn heute Sonntag ist und es noch nicht 18:00 ist
+            if (dayOfWeek === 0 && currentHour < 18) {
+                nextStream.setHours(18, 0, 0, 0);
+            } else {
+                // Nächsten Sonntag finden
+                const daysUntilSunday = (7 - dayOfWeek) % 7 || 7;
+                nextStream.setDate(now.getDate() + daysUntilSunday);
+                nextStream.setHours(18, 0, 0, 0);
+            }
+            
+            const diff = nextStream - now;
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            
+            const timeEl = document.getElementById('countdownTime');
+            const dateEl = document.getElementById('countdownDate');
+            
+            if (timeEl) {
+                if (days > 0) {
+                    timeEl.textContent = `${days}d ${hours}h ${minutes}m`;
+                } else if (hours > 0) {
+                    timeEl.textContent = `${hours}h ${minutes}m`;
+                } else {
+                    timeEl.textContent = `${minutes}m ${seconds}s`;
+                }
+            }
+            
+            if (dateEl) {
+                const options = { weekday: 'long', day: '2-digit', month: '2-digit' };
+                const dateStr = nextStream.toLocaleDateString('de-DE', options);
+                dateEl.textContent = `${dateStr} • 18:00`;
+            }
+        }
+        
+        // Update sofort und dann jede Sekunde
+        updateCountdown();
+        setInterval(updateCountdown, 1000);
+    </script>
+</body>
+</html>
+

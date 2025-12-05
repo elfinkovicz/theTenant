@@ -7,9 +7,11 @@ import { ProductModal } from '../components/ProductModal'
 import { ShopSettingsModal } from '../components/ShopSettingsModal'
 import { useAdmin } from '../hooks/useAdmin'
 import { useCartStore } from '../store/cartStore'
+import { useHydration } from '../hooks/useHydration'
 
 export const Shop = () => {
   const navigate = useNavigate()
+  const hydrated = useHydration()
   const { addItem, getTotalItems } = useCartStore()
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
@@ -113,7 +115,7 @@ export const Shop = () => {
               >
                 <ShoppingCart size={20} />
                 Warenkorb
-                {getTotalItems() > 0 && (
+                {hydrated && getTotalItems() > 0 && (
                   <span className="absolute -top-2 -right-2 bg-primary-600 text-white text-xs w-6 h-6 rounded-full flex items-center justify-center">
                     {getTotalItems()}
                   </span>

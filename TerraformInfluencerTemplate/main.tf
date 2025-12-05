@@ -29,6 +29,13 @@ locals {
   zone_id = var.create_route53_zone ? aws_route53_zone.main[0].zone_id : var.route53_zone_id
 }
 
+# Lambda Layers - Shared dependencies for all Lambda functions
+module "lambda_layers" {
+  source = "./modules/lambda-layers"
+
+  project_name = var.project_name
+}
+
 # S3 Website Hosting mit CloudFront
 module "website" {
   source = "./modules/s3-website"
@@ -82,6 +89,11 @@ module "ivs_chat" {
   source = "./modules/ivs-chat"
 
   project_name = var.project_name
+  
+  # Lambda Layers
+  aws_sdk_extended_layer_arn = module.lambda_layers.aws_sdk_extended_layer_arn
+  
+  depends_on = [module.lambda_layers]
 }
 
 # User Authentication
@@ -126,7 +138,12 @@ module "shop" {
   # Shop Owner Email
   shop_owner_email       = var.contact_email_recipient
   
-  depends_on = [module.user_auth]
+  # Lambda Layers
+  aws_sdk_core_layer_arn     = module.lambda_layers.aws_sdk_core_layer_arn
+  aws_sdk_extended_layer_arn = module.lambda_layers.aws_sdk_extended_layer_arn
+  utilities_layer_arn        = module.lambda_layers.utilities_layer_arn
+
+  depends_on = [module.lambda_layers, module.user_auth]
 }
 
 # Video Management (Admin)
@@ -142,7 +159,12 @@ module "video_management" {
   authorizer_id             = module.user_auth[0].authorizer_id
   allowed_origins           = ["https://${var.domain_name}", "https://${var.website_domain}"]
 
-  depends_on = [module.user_auth]
+  
+  # Lambda Layers
+  aws_sdk_core_layer_arn = module.lambda_layers.aws_sdk_core_layer_arn
+  utilities_layer_arn = module.lambda_layers.utilities_layer_arn
+
+  depends_on = [module.lambda_layers, module.user_auth]
 }
 
 # Team Management (Admin)
@@ -160,6 +182,10 @@ module "team_management" {
   # Nutze den Thumbnails-Bucket und CDN vom Video-Management
   assets_bucket_name = module.video_management[0].thumbnails_bucket_name
   cdn_domain         = replace(module.video_management[0].thumbnails_cdn_url, "https://", "")
+
+  
+  # Lambda Layers
+  aws_sdk_core_layer_arn = module.lambda_layers.aws_sdk_core_layer_arn
 
   depends_on = [module.user_auth, module.video_management]
 }
@@ -180,6 +206,10 @@ module "event_management" {
   assets_bucket_name = module.video_management[0].thumbnails_bucket_name
   cdn_domain         = replace(module.video_management[0].thumbnails_cdn_url, "https://", "")
 
+  
+  # Lambda Layers
+  aws_sdk_core_layer_arn = module.lambda_layers.aws_sdk_core_layer_arn
+
   depends_on = [module.user_auth, module.video_management]
 }
 
@@ -199,6 +229,10 @@ module "ad_management" {
   assets_bucket_name = module.video_management[0].thumbnails_bucket_name
   cdn_domain         = replace(module.video_management[0].thumbnails_cdn_url, "https://", "")
 
+  
+  # Lambda Layers
+  aws_sdk_core_layer_arn = module.lambda_layers.aws_sdk_core_layer_arn
+
   depends_on = [module.user_auth, module.video_management]
 }
 
@@ -217,8 +251,11 @@ module "hero_management" {
   # Nutze den Thumbnails-Bucket und CDN vom Video-Management
   assets_bucket_name = module.video_management[0].thumbnails_bucket_name
   cdn_domain         = replace(module.video_management[0].thumbnails_cdn_url, "https://", "")
+  
+  # Lambda Layers
+  aws_sdk_core_layer_arn = module.lambda_layers.aws_sdk_core_layer_arn
 
-  depends_on = [module.user_auth, module.video_management]
+  depends_on = [module.user_auth, module.video_management, module.lambda_layers]
 }
 
 # Product Management (Admin)
@@ -240,7 +277,11 @@ module "product_management" {
   images_bucket_name  = module.shop[0].product_images_bucket_name
   cdn_domain          = "${module.shop[0].product_images_bucket_name}.s3.${var.aws_region}.amazonaws.com"
 
-  depends_on = [module.user_auth, module.shop]
+  
+  # Lambda Layers
+  aws_sdk_core_layer_arn = module.lambda_layers.aws_sdk_core_layer_arn
+
+  depends_on = [module.lambda_layers, module.user_auth, module.shop]
 }
 
 # Channel Management (Admin)
@@ -254,6 +295,10 @@ module "channel_management" {
   api_gateway_id            = module.user_auth[0].api_gateway_id
   api_gateway_execution_arn = module.user_auth[0].api_gateway_execution_arn
   authorizer_id             = module.user_auth[0].authorizer_id
+
+  
+  # Lambda Layers
+  aws_sdk_core_layer_arn = module.lambda_layers.aws_sdk_core_layer_arn
 
   depends_on = [module.user_auth]
 }
@@ -270,6 +315,10 @@ module "contact_info_management" {
   api_gateway_execution_arn = module.user_auth[0].api_gateway_execution_arn
   authorizer_id             = module.user_auth[0].authorizer_id
 
+  
+  # Lambda Layers
+  aws_sdk_core_layer_arn = module.lambda_layers.aws_sdk_core_layer_arn
+
   depends_on = [module.user_auth]
 }
 
@@ -284,6 +333,10 @@ module "legal_management" {
   api_gateway_id            = module.user_auth[0].api_gateway_id
   api_gateway_execution_arn = module.user_auth[0].api_gateway_execution_arn
   authorizer_id             = module.user_auth[0].authorizer_id
+
+  
+  # Lambda Layers
+  aws_sdk_core_layer_arn = module.lambda_layers.aws_sdk_core_layer_arn
 
   depends_on = [module.user_auth]
 }
@@ -320,7 +373,15 @@ module "newsfeed_management" {
   assets_bucket_name = module.video_management[0].thumbnails_bucket_name
   cdn_domain         = replace(module.video_management[0].thumbnails_cdn_url, "https://", "")
 
-  depends_on = [module.user_auth, module.video_management]
+  # Messaging Settings für Telegram Integration
+  settings_table_name = var.enable_telegram_integration && length(module.messaging_settings) > 0 ? module.messaging_settings[0].settings_table_name : ""
+  settings_table_arn  = var.enable_telegram_integration && length(module.messaging_settings) > 0 ? module.messaging_settings[0].settings_table_arn : ""
+
+  
+  # Lambda Layers
+  aws_sdk_core_layer_arn = module.lambda_layers.aws_sdk_core_layer_arn
+
+  depends_on = [module.user_auth, module.video_management, module.messaging_settings]
 }
 
 # WhatsApp Integration
@@ -350,7 +411,32 @@ module "telegram_integration" {
   settings_table_name        = module.messaging_settings[0].settings_table_name
   settings_table_arn         = module.messaging_settings[0].settings_table_arn
 
+  
+  # Lambda Layers
+  aws_sdk_core_layer_arn = module.lambda_layers.aws_sdk_core_layer_arn
+
   depends_on = [module.newsfeed_management, module.video_management, module.messaging_settings]
+}
+
+# Email Notifications
+module "email_notifications" {
+  count  = var.enable_email_notifications ? 1 : 0
+  source = "./modules/email-notifications"
+
+  project_name               = var.project_name
+  cdn_domain                 = replace(module.video_management[0].thumbnails_cdn_url, "https://", "")
+  website_url                = "https://${var.website_domain}"
+  newsfeed_table_stream_arn  = module.newsfeed_management[0].dynamodb_table_stream_arn
+  settings_table_name        = module.messaging_settings[0].settings_table_name
+  settings_table_arn         = module.messaging_settings[0].settings_table_arn
+  users_table_name           = module.user_auth[0].users_table_name
+  users_table_arn            = module.user_auth[0].users_table_arn
+
+  # Lambda Layers
+  aws_sdk_core_layer_arn     = module.lambda_layers.aws_sdk_core_layer_arn
+  aws_sdk_extended_layer_arn = module.lambda_layers.aws_sdk_extended_layer_arn
+
+  depends_on = [module.newsfeed_management, module.video_management, module.messaging_settings, module.user_auth]
 }
 
 # Messaging Settings API
@@ -364,6 +450,31 @@ module "messaging_settings" {
   api_gateway_execution_arn = module.user_auth[0].api_gateway_execution_arn
   authorizer_id             = module.user_auth[0].authorizer_id
   admin_group_name          = "admins"
+  lambda_layer_arns         = [module.lambda_layers.aws_sdk_core_layer_arn]
+  domain_name               = var.domain_name
 
-  depends_on = [module.user_auth]
+  depends_on = [module.user_auth, module.lambda_layers]
+}
+
+# Billing System
+module "billing_system" {
+  count  = var.enable_billing_system ? 1 : 0
+  source = "./modules/billing-system"
+
+  project_name              = var.project_name
+  user_pool_id              = module.user_auth[0].user_pool_id
+  api_gateway_id            = module.user_auth[0].api_gateway_id
+  api_gateway_execution_arn = module.user_auth[0].api_gateway_execution_arn
+  authorizer_id             = module.user_auth[0].authorizer_id
+  stripe_secret_key         = var.stripe_secret_key
+  stripe_publishable_key    = var.stripe_publishable_key
+  stripe_webhook_secret     = var.stripe_webhook_secret
+  base_fee                  = var.billing_base_fee
+  aws_region                = var.aws_region
+  
+  # Lambda Layers
+  aws_sdk_core_layer_arn = module.lambda_layers.aws_sdk_core_layer_arn
+  utilities_layer_arn    = module.lambda_layers.utilities_layer_arn
+
+  depends_on = [module.user_auth, module.lambda_layers]
 }

@@ -190,6 +190,7 @@ data "archive_file" "video_api_lambda" {
   type        = "zip"
   source_dir  = "${path.module}/lambda"
   output_path = "${path.module}/lambda.zip"
+  excludes    = ["package-lock.json"]
 }
 
 resource "aws_lambda_function" "video_api" {
@@ -199,6 +200,12 @@ resource "aws_lambda_function" "video_api" {
   handler          = "index.handler"
   source_code_hash = data.archive_file.video_api_lambda.output_base64sha256
   runtime          = "nodejs20.x"
+
+  # Use Lambda Layers for dependencies
+  layers = [
+    var.aws_sdk_core_layer_arn,
+    var.utilities_layer_arn,
+  ]
   timeout          = 30
 
   environment {
@@ -206,7 +213,7 @@ resource "aws_lambda_function" "video_api" {
       VIDEOS_TABLE_NAME      = aws_dynamodb_table.videos.name
       VIDEOS_BUCKET_NAME     = aws_s3_bucket.videos.id
       THUMBNAILS_BUCKET_NAME = aws_s3_bucket.thumbnails.id
-      THUMBNAILS_CDN_URL     = "https://${aws_s3_bucket.thumbnails.bucket_regional_domain_name}"
+      THUMBNAILS_CDN_DOMAIN  = aws_s3_bucket.thumbnails.bucket_regional_domain_name
       USER_POOL_ID           = var.user_pool_id
       ADMIN_GROUP_NAME       = "admins"
     }

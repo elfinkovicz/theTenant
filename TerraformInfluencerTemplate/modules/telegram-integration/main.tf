@@ -9,6 +9,11 @@ resource "aws_lambda_function" "telegram_notifier" {
   handler          = "index.handler"
   source_code_hash = data.archive_file.telegram_lambda.output_base64sha256
   runtime          = "nodejs20.x"
+
+  # Use Lambda Layers for dependencies
+  layers = [
+    var.aws_sdk_core_layer_arn,
+  ]
   timeout          = 30
 
   environment {
@@ -23,7 +28,6 @@ data "archive_file" "telegram_lambda" {
   type        = "zip"
   source_dir  = "${path.module}/lambda"
   output_path = "${path.module}/lambda.zip"
-  excludes    = ["package-lock.json"]
 }
 
 # IAM Role for Lambda

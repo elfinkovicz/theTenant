@@ -60,6 +60,16 @@ class DeploymentConfig:
         self.ENABLE_HERO_MANAGEMENT = True
         self.ENABLE_PRODUCT_MANAGEMENT = True
         self.ENABLE_STREAM_RESTREAMING = True
+        self.ENABLE_TELEGRAM_INTEGRATION = True
+        self.ENABLE_EMAIL_NOTIFICATIONS = True
+        
+        # ============================================
+        # TELEGRAM CONFIGURATION
+        # ============================================
+        # Bot Token von @BotFather (deprecated - wird in Settings Table gespeichert)
+        self.TELEGRAM_BOT_TOKEN = ""
+        # Chat/Channel ID (deprecated - wird in Settings Table gespeichert)
+        self.TELEGRAM_CHAT_ID = ""
         
         # ============================================
         # ADMIN CONFIGURATION
@@ -91,8 +101,16 @@ class DeploymentConfig:
         # ============================================
         # STRIPE (optional)
         # ============================================
-        self.STRIPE_SECRET_KEY = ""
-        self.STRIPE_PUBLISHABLE_KEY = ""
+        import os
+        self.STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+        self.STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
+        
+        # ============================================
+        # BILLING SYSTEM
+        # ============================================
+        self.ENABLE_BILLING_SYSTEM = True  # Monatliche AWS-Kostenabrechnung
+        self.BILLING_BASE_FEE = 20  # Monatliche Grundgebühr in Euro
+        self.STRIPE_WEBHOOK_SECRET = ""  # Webhook Secret von Stripe Dashboard
         
         # ============================================
         # ROUTE53
@@ -226,6 +244,13 @@ class DeploymentConfig:
         print(f"  Hero Management:     {self.ENABLE_HERO_MANAGEMENT}")
         print(f"  Product Management:  {self.ENABLE_PRODUCT_MANAGEMENT}")
         print(f"  Stream Restreaming:  {self.ENABLE_STREAM_RESTREAMING}")
+        print(f"  Billing System:      {self.ENABLE_BILLING_SYSTEM}")
+        print(f"  Telegram Integration: {self.ENABLE_TELEGRAM_INTEGRATION}")
+        print(f"  Email Notifications: {self.ENABLE_EMAIL_NOTIFICATIONS}")
+        print()
+        print("Billing:")
+        print(f"  Base Fee:            {self.BILLING_BASE_FEE} EUR/Monat")
+        print(f"  Stripe Configured:   {'Yes' if self.STRIPE_SECRET_KEY else 'No'}")
         print()
         print("Admins:")
         for email in self.ADMIN_EMAILS:

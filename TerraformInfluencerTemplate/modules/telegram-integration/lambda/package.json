@@ -1,7 +1,7 @@
 {
-  "name": "telegram-integration",
+  "name": "telegram-notifier-lambda",
   "version": "1.0.0",
-  "description": "Telegram Bot Integration for Newsfeed",
+  "description": "Lambda function for Telegram newsfeed notifications",
   "main": "index.js",
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.0.0",

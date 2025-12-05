@@ -15,6 +15,13 @@ export interface TelegramSettings {
   chatName: string
 }
 
+export interface EmailSettings {
+  enabled: boolean
+  senderPrefix: string
+  senderDomain: string
+  senderName: string
+}
+
 class WhatsAppService {
   private apiUrl = awsConfig.api.user
 
@@ -163,6 +170,69 @@ class WhatsAppService {
             }
           }
         }
+      }
+      throw error
+    }
+  }
+
+  async getEmailSettings(token: string): Promise<EmailSettings> {
+    try {
+      const response = await axios.get(`${this.apiUrl}/email/settings`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      return response.data.settings
+    } catch (error: any) {
+      if (error.response?.status === 403 || error.response?.status === 404) {
+        console.log('📦 Using localStorage for Email settings (API not deployed)')
+        const saved = localStorage.getItem('email-settings')
+        if (saved) {
+          try {
+            return JSON.parse(saved)
+          } catch (e) {
+            console.error('Failed to parse saved settings:', e)
+          }
+        }
+      } else {
+        console.error('Failed to load Email settings:', error)
+      }
+      return {
+        enabled: false,
+        senderPrefix: 'newsfeed',
+        senderDomain: '',
+        senderName: 'Newsfeed'
+      }
+    }
+  }
+
+  async updateEmailSettings(settings: EmailSettings, token: string): Promise<void> {
+    // Save to localStorage first
+    localStorage.setItem('email-settings', JSON.stringify(settings))
+    
+    try {
+      await axios.put(
+        `${this.apiUrl}/email/settings`,
+        { settings },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+    } catch (error: any) {
+      if (error.response?.status === 403 || error.response?.status === 404) {
+        console.log('📦 Email settings saved to localStorage (API not deployed)')
+        return
+      }
+      throw error
+    }
+  }
+
+  async sendEmailTestMessage(token: string): Promise<void> {
+    try {
+      await axios.post(
+        `${this.apiUrl}/email/test`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+    } catch (error: any) {
+      if (error.response?.status === 403 || error.response?.status === 404) {
+        throw new Error('API nicht verfügbar - bitte Backend deployen')
       }
       throw error
     }

@@ -27,11 +27,13 @@ resource "aws_lambda_function" "messaging_settings_api" {
   source_code_hash = data.archive_file.lambda.output_base64sha256
   runtime          = "nodejs20.x"
   timeout          = 10
+  layers           = var.lambda_layer_arns
 
   environment {
     variables = {
       SETTINGS_TABLE_NAME = aws_dynamodb_table.messaging_settings.name
       ADMIN_GROUP_NAME    = var.admin_group_name
+      DOMAIN_NAME         = var.domain_name
     }
   }
 }
@@ -81,6 +83,23 @@ resource "aws_iam_role_policy" "dynamodb" {
         "dynamodb:UpdateItem"
       ]
       Resource = aws_dynamodb_table.messaging_settings.arn
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "ses" {
+  name = "ses-send-email"
+  role = aws_iam_role.lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "ses:SendEmail",
+        "ses:SendRawEmail"
+      ]
+      Resource = "*"
     }]
   })
 }
@@ -136,6 +155,30 @@ resource "aws_apigatewayv2_route" "put_telegram" {
 resource "aws_apigatewayv2_route" "post_telegram_test" {
   api_id             = var.api_gateway_id
   route_key          = "POST /telegram/test"
+  target             = "integrations/${aws_apigatewayv2_integration.api.id}"
+  authorization_type = "JWT"
+  authorizer_id      = var.authorizer_id
+}
+
+resource "aws_apigatewayv2_route" "get_email" {
+  api_id             = var.api_gateway_id
+  route_key          = "GET /email/settings"
+  target             = "integrations/${aws_apigatewayv2_integration.api.id}"
+  authorization_type = "JWT"
+  authorizer_id      = var.authorizer_id
+}
+
+resource "aws_apigatewayv2_route" "put_email" {
+  api_id             = var.api_gateway_id
+  route_key          = "PUT /email/settings"
+  target             = "integrations/${aws_apigatewayv2_integration.api.id}"
+  authorization_type = "JWT"
+  authorizer_id      = var.authorizer_id
+}
+
+resource "aws_apigatewayv2_route" "post_email_test" {
+  api_id             = var.api_gateway_id
+  route_key          = "POST /email/test"
   target             = "integrations/${aws_apigatewayv2_integration.api.id}"
   authorization_type = "JWT"
   authorizer_id      = var.authorizer_id

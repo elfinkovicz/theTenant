@@ -11,7 +11,7 @@ const s3Client = new S3Client({});
 const VIDEOS_TABLE = process.env.VIDEOS_TABLE_NAME;
 const VIDEOS_BUCKET = process.env.VIDEOS_BUCKET_NAME;
 const THUMBNAILS_BUCKET = process.env.THUMBNAILS_BUCKET_NAME;
-const THUMBNAILS_CDN_URL = process.env.THUMBNAILS_CDN_URL;
+const THUMBNAILS_CDN_DOMAIN = process.env.THUMBNAILS_CDN_DOMAIN;
 const ADMIN_GROUP = process.env.ADMIN_GROUP_NAME || 'admins';
 
 // Helper: Check if user is admin
@@ -102,7 +102,7 @@ async function listVideos(event) {
         ...video,
         videoUrl,
         thumbnailUrl: video.thumbnailKey 
-          ? `${THUMBNAILS_CDN_URL}/${video.thumbnailKey}`
+          ? `https://${THUMBNAILS_CDN_DOMAIN}/${video.thumbnailKey}`
           : null
       };
     }));
@@ -164,7 +164,7 @@ async function getVideo(event) {
         ...video,
         videoUrl,
         thumbnailUrl: video.thumbnailKey 
-          ? `${THUMBNAILS_CDN_URL}/${video.thumbnailKey}`
+          ? `https://${THUMBNAILS_CDN_DOMAIN}/${video.thumbnailKey}`
           : null
       }
     });

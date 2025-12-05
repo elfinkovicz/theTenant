@@ -23,6 +23,16 @@ output "user_table_name" {
   value       = aws_dynamodb_table.users.name
 }
 
+output "users_table_name" {
+  description = "DynamoDB Users Table Name (alias)"
+  value       = aws_dynamodb_table.users.name
+}
+
+output "users_table_arn" {
+  description = "DynamoDB Users Table ARN"
+  value       = aws_dynamodb_table.users.arn
+}
+
 output "api_endpoint" {
   description = "User API Endpoint"
   value       = aws_apigatewayv2_api.user_api.api_endpoint

@@ -264,3 +264,30 @@ variable "telegram_chat_id" {
   type        = string
   default     = ""
 }
+
+# Email Notifications
+variable "enable_email_notifications" {
+  description = "Email Notifications für Newsfeed aktivieren"
+  type        = bool
+  default     = false
+}
+
+# Billing System
+variable "enable_billing_system" {
+  description = "Billing System für monatliche AWS-Kostenabrechnung aktivieren"
+  type        = bool
+  default     = false
+}
+
+variable "stripe_webhook_secret" {
+  description = "Stripe Webhook Secret"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "billing_base_fee" {
+  description = "Monatliche Grundgebühr in Euro"
+  type        = number
+  default     = 20
+}

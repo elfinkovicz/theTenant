@@ -1,19 +1,28 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { ShoppingCart, Trash2, Plus, Minus, ArrowLeft } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useCartStore } from '../store/cartStore'
 import { PayPalCheckout } from '../components/PayPalCheckout'
-import { useHydration } from '../hooks/useHydration'
 
 export const Cart = () => {
   const navigate = useNavigate()
-  const hydrated = useHydration()
   const { items, removeItem, updateQuantity, clearCart, getTotalPrice } = useCartStore()
   const [showCheckout, setShowCheckout] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Wait for hydration to complete
-  if (!hydrated) {
+  // Wait for store to hydrate from localStorage
+  useEffect(() => {
+    // Small delay to ensure localStorage has been read
+    const timer = setTimeout(() => {
+      setIsLoading(false)
+    }, 100)
+    
+    return () => clearTimeout(timer)
+  }, [])
+
+  // Show loading state while hydrating
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
@@ -21,6 +30,7 @@ export const Cart = () => {
     )
   }
 
+  // Show empty cart message
   if (items.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center">

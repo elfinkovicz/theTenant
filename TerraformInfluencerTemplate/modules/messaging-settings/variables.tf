@@ -28,3 +28,14 @@ variable "admin_group_name" {
   description = "Cognito admin group name"
   type        = string
 }
+
+variable "domain_name" {
+  description = "Domain name for email sender"
+  type        = string
+}
+
+variable "lambda_layer_arns" {
+  description = "List of Lambda Layer ARNs"
+  type        = list(string)
+  default     = []
+}

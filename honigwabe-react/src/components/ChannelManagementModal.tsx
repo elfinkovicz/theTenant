@@ -29,7 +29,7 @@ export const ChannelManagementModal = ({ isOpen, onClose, onSuccess, channels }:
     )
   }
 
-  const handleChange = (channelId: string, field: 'name' | 'description', value: string) => {
+  const handleChange = (channelId: string, field: 'name' | 'description' | 'url', value: string) => {
     setEditedChannels(prev =>
       prev.map(ch =>
         ch.id === channelId ? { ...ch, [field]: value } : ch
@@ -121,7 +121,6 @@ export const ChannelManagementModal = ({ isOpen, onClose, onSuccess, channels }:
                               style={{ backgroundColor: channel.color }}
                             />
                             <span className="font-semibold">{channel.platform}</span>
-                            <span className="text-dark-400 text-sm">({channel.followers} followers)</span>
                           </div>
 
                           {/* Name Input */}
@@ -135,6 +134,20 @@ export const ChannelManagementModal = ({ isOpen, onClose, onSuccess, channels }:
                               onChange={(e) => handleChange(channel.id, 'name', e.target.value)}
                               className="w-full px-3 py-2 bg-dark-900 border border-dark-600 rounded-lg focus:outline-none focus:border-primary-500"
                               placeholder="@yourchannel"
+                            />
+                          </div>
+
+                          {/* URL Input */}
+                          <div>
+                            <label className="block text-sm text-dark-400 mb-1">
+                              Channel Link
+                            </label>
+                            <input
+                              type="url"
+                              value={channel.url}
+                              onChange={(e) => handleChange(channel.id, 'url', e.target.value)}
+                              className="w-full px-3 py-2 bg-dark-900 border border-dark-600 rounded-lg focus:outline-none focus:border-primary-500"
+                              placeholder="https://..."
                             />
                           </div>
 

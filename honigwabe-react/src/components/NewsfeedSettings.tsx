@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
-import { Save, X, MessageCircle, Phone, Users, Send } from 'lucide-react'
+import { Save, X, MessageCircle, Phone, Users, Send, Mail } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
-import { whatsappService, WhatsAppSettings, TelegramSettings } from '../services/whatsapp.service'
+import { whatsappService, WhatsAppSettings, TelegramSettings, EmailSettings } from '../services/whatsapp.service'
+import { awsConfig } from '../config/aws-config'
 
 interface NewsfeedSettingsProps {
   onClose: () => void
 }
 
-type TabType = 'whatsapp' | 'telegram'
+type TabType = 'whatsapp' | 'telegram' | 'email'
 
 export const NewsfeedSettings = ({ onClose }: NewsfeedSettingsProps) => {
   const { accessToken } = useAuthStore()
@@ -26,6 +27,12 @@ export const NewsfeedSettings = ({ onClose }: NewsfeedSettingsProps) => {
     chatId: '',
     chatName: ''
   })
+  const [emailSettings, setEmailSettings] = useState<EmailSettings>({
+    enabled: false,
+    senderPrefix: 'newsfeed',
+    senderDomain: awsConfig.domain || 'honigwabe.live',
+    senderName: 'Newsfeed'
+  })
 
   useEffect(() => {
     loadSettings()
@@ -38,12 +45,14 @@ export const NewsfeedSettings = ({ onClose }: NewsfeedSettingsProps) => {
     }
 
     try {
-      const [whatsappSettings, telegramSettingsData] = await Promise.all([
+      const [whatsappSettings, telegramSettingsData, emailSettingsData] = await Promise.all([
         whatsappService.getSettings(accessToken),
-        whatsappService.getTelegramSettings(accessToken)
+        whatsappService.getTelegramSettings(accessToken),
+        whatsappService.getEmailSettings(accessToken)
       ])
       setSettings(whatsappSettings)
       setTelegramSettings(telegramSettingsData)
+      setEmailSettings(emailSettingsData)
     } catch (error) {
       // Silently fail - fallback to localStorage is handled in service
       console.log('Using local settings (API not yet deployed)')
@@ -59,8 +68,10 @@ export const NewsfeedSettings = ({ onClose }: NewsfeedSettingsProps) => {
     try {
       if (activeTab === 'whatsapp') {
         await whatsappService.updateSettings(settings, accessToken)
-      } else {
+      } else if (activeTab === 'telegram') {
         await whatsappService.updateTelegramSettings(telegramSettings, accessToken)
+      } else {
+        await whatsappService.updateEmailSettings(emailSettings, accessToken)
       }
       alert('✅ Einstellungen erfolgreich gespeichert!\n\n💡 Hinweis: Einstellungen werden lokal gespeichert, bis das Backend deployed wird.')
       onClose()
@@ -115,6 +126,24 @@ export const NewsfeedSettings = ({ onClose }: NewsfeedSettingsProps) => {
     }
   }
 
+  const handleEmailTestMessage = async () => {
+    if (!accessToken) return
+
+    if (!emailSettings.enabled || !emailSettings.senderPrefix) {
+      alert('⚠️ Bitte fülle alle Felder aus und aktiviere die Integration')
+      return
+    }
+
+    try {
+      await whatsappService.sendEmailTestMessage(accessToken)
+      alert('✅ Test-E-Mail wurde erfolgreich versendet!\n\nÜberprüfe dein E-Mail-Postfach.')
+    } catch (error: any) {
+      console.error('Failed to send test email:', error)
+      const errorMsg = error.response?.data?.error || error.message || 'Unbekannter Fehler'
+      alert(`❌ Fehler beim Senden: ${errorMsg}\n\nÜberprüfe:\n- Sender-Prefix korrekt?\n- Domain in SES verifiziert?`)
+    }
+  }
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -160,12 +189,23 @@ export const NewsfeedSettings = ({ onClose }: NewsfeedSettingsProps) => {
               <Send size={20} />
               Telegram
             </button>
+            <button
+              onClick={() => setActiveTab('email')}
+              className={`flex-1 px-6 py-4 font-medium transition-colors flex items-center justify-center gap-2 ${
+                activeTab === 'email'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-dark-800 text-dark-400 hover:text-white hover:bg-dark-700'
+              }`}
+            >
+              <Mail size={20} />
+              E-Mail
+            </button>
           </div>
         </div>
 
         <div className="p-6 space-y-6">
           {activeTab === 'whatsapp' ? (
-          <div>
+            <div>
             <div className="flex items-center gap-3 mb-4">
               <MessageCircle size={24} className="text-green-500" />
               <h3 className="text-xl font-semibold">WhatsApp Integration</h3>
@@ -280,9 +320,9 @@ export const NewsfeedSettings = ({ onClose }: NewsfeedSettingsProps) => {
                 </p>
               </div>
             </div>
-          </div>
-          ) : (
-          <div>
+            </div>
+          ) : activeTab === 'telegram' ? (
+            <div>
             {/* Telegram Integration */}
             <div className="flex items-center gap-3 mb-4">
               <Send size={24} className="text-blue-500" />
@@ -401,7 +441,107 @@ export const NewsfeedSettings = ({ onClose }: NewsfeedSettingsProps) => {
               </div>
             </div>
           </div>
-          )}
+          ) : activeTab === 'email' ? (
+            <div>
+            {/* Email Integration */}
+            <div className="flex items-center gap-3 mb-4">
+              <Mail size={24} className="text-primary-500" />
+              <h3 className="text-xl font-semibold">E-Mail Benachrichtigungen</h3>
+            </div>
+            
+            <p className="text-dark-400 mb-4">
+              Sende neue Newsfeed-Posts automatisch per E-Mail an alle registrierten Benutzer
+            </p>
+
+            {/* Enable Toggle */}
+            <div className="mb-6">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={emailSettings.enabled}
+                  onChange={(e) => setEmailSettings({ ...emailSettings, enabled: e.target.checked })}
+                  className="w-5 h-5 rounded"
+                />
+                <span className="font-medium">E-Mail-Benachrichtigungen aktivieren</span>
+              </label>
+            </div>
+
+            {/* Settings Fields */}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  <Mail size={16} className="inline mr-2" />
+                  Absender E-Mail
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={emailSettings.senderPrefix}
+                    onChange={(e) => setEmailSettings({ ...emailSettings, senderPrefix: e.target.value })}
+                    placeholder="newsfeed"
+                    className="input flex-1 font-mono text-sm"
+                    disabled={!emailSettings.enabled}
+                  />
+                  <span className="text-dark-400 font-mono">@{awsConfig.domain || 'honigwabe.live'}</span>
+                </div>
+                <p className="text-xs text-dark-500 mt-1">
+                  E-Mails werden von {emailSettings.senderPrefix || 'newsfeed'}@{awsConfig.domain || 'honigwabe.live'} gesendet
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Absender-Name
+                </label>
+                <input
+                  type="text"
+                  value={emailSettings.senderName}
+                  onChange={(e) => setEmailSettings({ ...emailSettings, senderName: e.target.value })}
+                  placeholder="Newsfeed"
+                  className="input w-full"
+                  disabled={!emailSettings.enabled}
+                />
+                <p className="text-xs text-dark-500 mt-1">
+                  Wird als Anzeigename in E-Mails verwendet
+                </p>
+              </div>
+            </div>
+
+            {/* Test Button */}
+            {emailSettings.enabled && (
+              <div className="mt-6 p-4 bg-dark-800 rounded-lg">
+                <p className="text-sm text-dark-400 mb-3">
+                  Teste die Integration, indem du eine Test-E-Mail sendest
+                </p>
+                <button
+                  onClick={handleEmailTestMessage}
+                  className="btn-secondary flex items-center gap-2"
+                >
+                  <Mail size={18} />
+                  Test-E-Mail senden
+                </button>
+              </div>
+            )}
+
+            {/* Info Box */}
+            <div className="mt-6 border-t border-dark-800 pt-6">
+              <div className="bg-primary-500/10 border border-primary-500/30 rounded-lg p-4">
+                <h4 className="font-semibold mb-2 flex items-center gap-2">
+                  <Mail size={18} className="text-primary-400" />
+                  Wichtige Hinweise
+                </h4>
+                <ul className="text-sm text-dark-300 space-y-2 list-disc list-inside">
+                  <li>Alle registrierten Benutzer erhalten die E-Mails</li>
+                  <li>E-Mails werden nur bei veröffentlichten Posts versendet</li>
+                  <li>Schöne HTML-Templates mit Bildern und Links</li>
+                </ul>
+                <p className="text-xs text-dark-500 mt-3">
+                  💡 Neue Posts werden automatisch per E-Mail versendet, sobald sie veröffentlicht werden
+                </p>
+              </div>
+            </div>
+            </div>
+          ) : null}
         </div>
 
         {/* Action Buttons */}

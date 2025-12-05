@@ -26,5 +26,7 @@ export const awsConfig = {
     bucketName: 'honigwabe-website-081033004511',
     sponsorAssets: 'honigwabe-sponsor-assets-081033004511',
     productImages: 'honigwabe-product-images-081033004511'
-  }
+  },
+  
+  domain: 'honigwabe.live'
 }

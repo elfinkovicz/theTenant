@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Play, Users, MessageCircle, Share2, RefreshCw, Edit, Settings } from 'lucide-react'
-import { streamService } from '../services/stream.service'
+import { streamService, StreamInfo } from '../services/stream.service'
 import { awsConfig } from '../config/aws-config'
 import { VideoPlayer } from '../components/VideoPlayer'
 import { LiveChat } from '../components/LiveChat'
 import { AdManagement } from '../components/AdManagement'
-import { StreamSettings, StreamInfo } from '../components/StreamSettings'
+import { StreamSettings } from '../components/StreamSettings'
 import { advertisementService, Advertisement } from '../services/advertisement.service'
 import { useAdmin } from '../hooks/useAdmin'
 
@@ -14,7 +14,8 @@ export const Live = () => {
   const [isChecking, setIsChecking] = useState(true)
   const [showPlayer, setShowPlayer] = useState(false)
   const [viewerCount, setViewerCount] = useState(0)
-  const [advertisement, setAdvertisement] = useState<Advertisement | null>(null)
+  const [topBanner, setTopBanner] = useState<Advertisement | null>(null)
+  const [bottomBanner, setBottomBanner] = useState<Advertisement | null>(null)
   const [showAdManagement, setShowAdManagement] = useState(false)
   const [showStreamSettings, setShowStreamSettings] = useState(false)
   const [streamInfo, setStreamInfo] = useState<StreamInfo>({
@@ -56,26 +57,32 @@ export const Live = () => {
     }
   }
 
-  const loadStreamInfo = () => {
-    const saved = localStorage.getItem('streamInfo')
-    if (saved) {
-      try {
-        setStreamInfo(JSON.parse(saved))
-      } catch (error) {
-        console.error('Failed to load stream info:', error)
-      }
+  const loadStreamInfo = async () => {
+    try {
+      const info = await streamService.getStreamInfo()
+      setStreamInfo(info)
+    } catch (error) {
+      console.error('Failed to load stream info:', error)
     }
   }
 
   const saveStreamInfo = async (info: StreamInfo) => {
-    localStorage.setItem('streamInfo', JSON.stringify(info))
-    setStreamInfo(info)
+    try {
+      await streamService.updateStreamInfo(info)
+      setStreamInfo(info)
+    } catch (error) {
+      console.error('Failed to save stream info:', error)
+      throw error
+    }
   }
 
   const loadAdvertisement = async () => {
     try {
-      const ad = await advertisementService.getAdvertisement()
-      setAdvertisement(ad)
+      const data = await advertisementService.getAdvertisements()
+      if (data) {
+        setTopBanner(data.topBanner)
+        setBottomBanner(data.bottomBanner)
+      }
     } catch (error) {
       console.error('Failed to load advertisement:', error)
     }
@@ -144,7 +151,7 @@ export const Live = () => {
       <div className="container mx-auto px-4 py-8">
 
         {/* Top Ad Banner - Full Width */}
-        {(advertisement?.enabled && advertisement?.imageUrl) || isAdmin ? (
+        {(topBanner?.enabled && topBanner?.imageUrl) || isAdmin ? (
           <div className="mb-6 relative group">
             {isAdmin && (
               <button
@@ -155,30 +162,30 @@ export const Live = () => {
               </button>
             )}
             
-            {advertisement?.enabled && advertisement?.imageUrl ? (
-              advertisement.linkUrl ? (
+            {topBanner?.enabled && topBanner?.imageUrl ? (
+              topBanner.linkUrl ? (
                 <a 
-                  href={advertisement.linkUrl} 
+                  href={topBanner.linkUrl} 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="block"
                 >
                   <img 
-                    src={advertisement.imageUrl} 
-                    alt="Advertisement" 
+                    src={topBanner.imageUrl} 
+                    alt="Top Advertisement" 
                     className="w-full h-60 object-cover rounded-lg"
                   />
                 </a>
               ) : (
                 <img 
-                  src={advertisement.imageUrl} 
-                  alt="Advertisement" 
+                  src={topBanner.imageUrl} 
+                  alt="Top Advertisement" 
                   className="w-full h-60 object-cover rounded-lg"
                 />
               )
             ) : isAdmin ? (
               <div className="h-60 bg-gradient-to-r from-primary-900/20 via-dark-800 to-primary-900/20 flex items-center justify-center rounded-lg border-2 border-dashed border-dark-700">
-                <span className="text-dark-500 text-lg">Advertisement Space - 1920x240px</span>
+                <span className="text-dark-500 text-lg">Top Advertisement Space - 1920x240px</span>
               </div>
             ) : null}
           </div>
@@ -306,7 +313,7 @@ export const Live = () => {
         </div>
 
         {/* Bottom Ad Banner - Full Width */}
-        {(advertisement?.enabled && advertisement?.imageUrl) || isAdmin ? (
+        {(bottomBanner?.enabled && bottomBanner?.imageUrl) || isAdmin ? (
           <div className="mt-6 relative group">
             {isAdmin && (
               <button
@@ -317,30 +324,30 @@ export const Live = () => {
               </button>
             )}
             
-            {advertisement?.enabled && advertisement?.imageUrl ? (
-              advertisement.linkUrl ? (
+            {bottomBanner?.enabled && bottomBanner?.imageUrl ? (
+              bottomBanner.linkUrl ? (
                 <a 
-                  href={advertisement.linkUrl} 
+                  href={bottomBanner.linkUrl} 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="block"
                 >
                   <img 
-                    src={advertisement.imageUrl} 
-                    alt="Advertisement" 
+                    src={bottomBanner.imageUrl} 
+                    alt="Bottom Advertisement" 
                     className="w-full h-60 object-cover rounded-lg"
                   />
                 </a>
               ) : (
                 <img 
-                  src={advertisement.imageUrl} 
-                  alt="Advertisement" 
+                  src={bottomBanner.imageUrl} 
+                  alt="Bottom Advertisement" 
                   className="w-full h-60 object-cover rounded-lg"
                 />
               )
             ) : isAdmin ? (
               <div className="h-60 bg-gradient-to-r from-primary-900/20 via-dark-800 to-primary-900/20 flex items-center justify-center rounded-lg border-2 border-dashed border-dark-700">
-                <span className="text-dark-500 text-lg">Advertisement Space - 1920x240px</span>
+                <span className="text-dark-500 text-lg">Bottom Advertisement Space - 1920x240px</span>
               </div>
             ) : null}
           </div>
