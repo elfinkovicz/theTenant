@@ -301,10 +301,10 @@ def stop_restreaming(event):
 
 def create_medialive_channel(destination):
     """Erstelle MediaLive Channel für Restreaming"""
-    project_name = os.environ['PROJECT_NAME']
-    ivs_playback_url = os.environ['IVS_PLAYBACK_URL']
-    medialive_role_arn = os.environ['MEDIALIVE_ROLE_ARN']
-    sg_id = os.environ['MEDIALIVE_SG_ID']
+    project_name = os.environ.get('PROJECT_NAME', 'default')
+    ivs_playback_url = os.environ.get('IVS_PLAYBACK_URL', '')
+    medialive_role_arn = os.environ.get('MEDIALIVE_ROLE_ARN', '')
+    sg_id = os.environ.get('MEDIALIVE_SG_ID', '')
     
     # Erstelle Input (HLS Pull von IVS)
     input_response = medialive.create_input(
