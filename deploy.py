@@ -235,17 +235,61 @@ def prepare_lambda_functions():
     else:
         log_warning("Lambda Layers Modul nicht gefunden - überspringe")
     
-    # Stream Restreaming Lambda ZIP erstellen (falls benötigt)
-    restreaming_lambda_dir = Path(config.TERRAFORM_DIR) / "modules" / "stream-restreaming" / "lambda"
-    if restreaming_lambda_dir.exists():
-        try:
-            import zipfile
-            zip_path = restreaming_lambda_dir.parent / "lambda.zip"
-            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                zipf.write(restreaming_lambda_dir / "index.py", "index.py")
-            log_success("Stream Restreaming Lambda ZIP erstellt")
-        except Exception as e:
-            log_warning(f"Stream Restreaming Lambda ZIP konnte nicht erstellt werden: {e}")
+    # Stream Restreaming Lambda ZIPs erstellen (falls benötigt)
+    if config.ENABLE_STREAM_RESTREAMING:
+        log_info("Baue Stream Restreaming Lambda-Funktionen...")
+        restreaming_module_dir = Path(config.TERRAFORM_DIR) / "modules" / "stream-restreaming"
+        
+        if restreaming_module_dir.exists():
+            try:
+                import platform
+                if platform.system() == "Windows":
+                    build_script = restreaming_module_dir / "build-lambdas.ps1"
+                    if build_script.exists():
+                        run_command("powershell -ExecutionPolicy Bypass -File build-lambdas.ps1", cwd=restreaming_module_dir)
+                    else:
+                        log_warning("build-lambdas.ps1 nicht gefunden - erstelle ZIPs manuell")
+                        # Fallback: Erstelle ZIPs manuell
+                        import zipfile
+                        lambda_dir = restreaming_module_dir / "lambda"
+                        
+                        # lambda.zip (API Handler)
+                        with zipfile.ZipFile(restreaming_module_dir / "lambda.zip", 'w', zipfile.ZIP_DEFLATED) as zipf:
+                            zipf.write(lambda_dir / "index.py", "index.py")
+                        
+                        # monitor.zip (Stream Monitor)
+                        with zipfile.ZipFile(restreaming_module_dir / "monitor.zip", 'w', zipfile.ZIP_DEFLATED) as zipf:
+                            zipf.write(lambda_dir / "stream_monitor.py", "stream_monitor.py")
+                            zipf.write(lambda_dir / "index.py", "index.py")
+                else:
+                    build_script = restreaming_module_dir / "build-lambdas.sh"
+                    if build_script.exists():
+                        run_command("chmod +x build-lambdas.sh && ./build-lambdas.sh", cwd=restreaming_module_dir)
+                    else:
+                        log_warning("build-lambdas.sh nicht gefunden - erstelle ZIPs manuell")
+                        # Fallback: Erstelle ZIPs manuell
+                        import zipfile
+                        lambda_dir = restreaming_module_dir / "lambda"
+                        
+                        # lambda.zip (API Handler)
+                        with zipfile.ZipFile(restreaming_module_dir / "lambda.zip", 'w', zipfile.ZIP_DEFLATED) as zipf:
+                            zipf.write(lambda_dir / "index.py", "index.py")
+                        
+                        # monitor.zip (Stream Monitor)
+                        with zipfile.ZipFile(restreaming_module_dir / "monitor.zip", 'w', zipfile.ZIP_DEFLATED) as zipf:
+                            zipf.write(lambda_dir / "stream_monitor.py", "stream_monitor.py")
+                            zipf.write(lambda_dir / "index.py", "index.py")
+                
+                log_success("Stream Restreaming Lambda-Funktionen gebaut")
+            except Exception as e:
+                log_error(f"Fehler beim Bauen der Stream Restreaming Lambda-Funktionen: {e}")
+                log_warning("Bitte baue die Lambda-Funktionen manuell:")
+                log_info("  cd TerraformInfluencerTemplate/modules/stream-restreaming")
+                log_info("  ./build-lambdas.ps1  (Windows)")
+                log_info("  ./build-lambdas.sh   (Linux/Mac)")
+                raise
+        else:
+            log_warning("Stream Restreaming Modul nicht gefunden - überspringe")
     
     # Billing System Lambda-Funktionen bauen (falls aktiviert)
     if config.ENABLE_BILLING_SYSTEM:
