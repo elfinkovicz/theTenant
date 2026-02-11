@@ -1,918 +1,1238 @@
 #!/usr/bin/env python3
 """
-Automatisches Deployment-Script für Creator Platform
-Verwendung: python deploy.py
+ViralTenant Platform - Simplified Deployment Script
+Deploys infrastructure, frontend, billing system, and invalidates CloudFront
 """
 
 import os
 import sys
 import subprocess
 import json
+import time
+import argparse
 from pathlib import Path
-from deployment_config import config
 
-
-
-class Colors:
-    """ANSI Farben für Terminal-Output"""
-    BLUE = '\033[0;34m'
-    GREEN = '\033[0;32m'
-    YELLOW = '\033[1;33m'
-    RED = '\033[0;31m'
-    NC = '\033[0m'  # No Color
-
-
-def log_info(msg):
-    print(f"{Colors.BLUE}[INFO] {msg}{Colors.NC}")
-
-
-def log_success(msg):
-    print(f"{Colors.GREEN}[OK] {msg}{Colors.NC}")
-
-
-def log_warning(msg):
-    print(f"{Colors.YELLOW}[WARN] {msg}{Colors.NC}")
-
-
-def log_error(msg):
-    print(f"{Colors.RED}[ERROR] {msg}{Colors.NC}")
-
-
-def log_step(msg):
-    print()
-    print(f"{Colors.BLUE}{'=' * 50}{Colors.NC}")
-    print(f"{Colors.BLUE}{msg}{Colors.NC}")
-    print(f"{Colors.BLUE}{'=' * 50}{Colors.NC}")
-    print()
-
-
-def run_command(cmd, cwd=None, check=True, capture_output=False):
-    """Führt Shell-Befehl aus"""
-    try:
-        result = subprocess.run(
-            cmd,
+def run_command(command, cwd=None, show_output=True):
+    """Run a shell command with real-time output"""
+    print(f"\n🔧 Running: {command}")
+    if cwd:
+        print(f"📁 Working directory: {cwd}")
+    print("-" * 50)
+    
+    if show_output:
+        # Run with real-time output
+        process = subprocess.Popen(
+            command,
             shell=True,
             cwd=cwd,
-            check=check,
-            capture_output=capture_output,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+            bufsize=1
+        )
+        
+        output_lines = []
+        while True:
+            output = process.stdout.readline()
+            if output == '' and process.poll() is not None:
+                break
+            if output:
+                print(output.strip())
+                output_lines.append(output.strip())
+        
+        return_code = process.poll()
+        full_output = '\n'.join(output_lines)
+    else:
+        # Run without real-time output (for JSON parsing)
+        result = subprocess.run(
+            command,
+            shell=True,
+            cwd=cwd,
+            capture_output=True,
             text=True
         )
-        return result
-    except subprocess.CalledProcessError as e:
-        log_error(f"Befehl fehlgeschlagen: {cmd}")
-        if capture_output:
-            log_error(f"Output: {e.stdout}")
-            log_error(f"Error: {e.stderr}")
-        raise
-
-
-def confirm(question):
-    """Fragt Benutzer nach Bestätigung"""
-    while True:
-        answer = input(f"{question} (yes/no): ").lower()
-        if answer in ['yes', 'y']:
-            return True
-        if answer in ['no', 'n']:
-            return False
-        print("Bitte 'yes' oder 'no' eingeben")
-
-
-def validate_config():
-    """Validiert Konfiguration"""
-    log_step("SCHRITT 0: Konfiguration validieren")
+        return_code = result.returncode
+        full_output = result.stdout
+        
+        if result.stderr:
+            print(result.stderr, file=sys.stderr)
     
-    config.show()
-    print()
+    print("-" * 50)
     
-    errors = config.validate()
-    if errors:
-        log_error("Konfiguration ist nicht valide:")
-        for error in errors:
-            print(f"  - {error}")
-        print()
-        log_info("Passe deployment-config.py an und starte erneut")
+    if return_code != 0:
+        print(f"❌ Command failed with exit code {return_code}")
         sys.exit(1)
     
-    log_success("Konfiguration ist valide")
-    print()
+    print("✅ Command completed successfully")
     
-    if not confirm("Ist die Konfiguration korrekt?"):
-        log_warning("Deployment abgebrochen")
-        sys.exit(0)
-
-
-def check_aws_cli():
-    """Prüft AWS CLI Konfiguration"""
-    log_step("PHASE 1: AWS Setup prüfen")
+    # Return a result-like object
+    class Result:
+        def __init__(self, stdout, returncode):
+            self.stdout = stdout
+            self.returncode = returncode
     
-    log_info("Prüfe AWS CLI Konfiguration...")
-    try:
-        run_command(
-            f"aws sts get-caller-identity --profile {config.AWS_PROFILE}",
-            capture_output=True
-        )
-        log_success("AWS CLI konfiguriert")
-    except:
-        log_error(f"AWS CLI Profile '{config.AWS_PROFILE}' nicht konfiguriert")
-        log_info(f"Führe aus: aws configure --profile {config.AWS_PROFILE}")
+    return Result(full_output, return_code)
+
+def deploy_infrastructure():
+    """Deploy Terraform infrastructure"""
+    print("\n" + "=" * 60)
+    print("🏗️ DEPLOYING TERRAFORM INFRASTRUCTURE")
+    print("=" * 60)
+    
+    infra_dir = Path("viraltenant-infrastructure")
+    if not infra_dir.exists():
+        print("❌ Infrastructure directory not found!")
         sys.exit(1)
-
-
-def setup_terraform_backend():
-    """Erstellt Terraform Backend (S3 + DynamoDB)"""
-    log_step("PHASE 2: Terraform Backend erstellen")
     
-    # S3 Bucket
-    log_info("Erstelle S3 Bucket für Terraform State...")
     try:
-        run_command(
-            f"aws s3 ls s3://{config.TF_STATE_BUCKET} --profile {config.AWS_PROFILE}",
-            capture_output=True
-        )
-        log_warning("S3 Bucket existiert bereits")
-    except:
-        run_command(
-            f"aws s3 mb s3://{config.TF_STATE_BUCKET} "
-            f"--region {config.AWS_REGION} --profile {config.AWS_PROFILE}"
-        )
+        # Initialize Terraform
+        print("\n📦 Initializing Terraform...")
+        run_command("terraform init", cwd=infra_dir)
         
-        # Versioning
-        run_command(
-            f"aws s3api put-bucket-versioning "
-            f"--bucket {config.TF_STATE_BUCKET} "
-            f"--versioning-configuration Status=Enabled "
-            f"--profile {config.AWS_PROFILE}"
-        )
+        # Apply infrastructure
+        print("\n🚀 Applying infrastructure changes...")
+        print("⚠️  You will be prompted to confirm the changes with 'yes'")
+        run_command("terraform apply -var-file=terraform.tfvars", cwd=infra_dir)
         
-        # Encryption
-        run_command(
-            f'aws s3api put-bucket-encryption '
-            f'--bucket {config.TF_STATE_BUCKET} '
-            f'--server-side-encryption-configuration \'{{"Rules":[{{"ApplyServerSideEncryptionByDefault":{{"SSEAlgorithm":"AES256"}}}}]}}\' '
-            f'--profile {config.AWS_PROFILE}'
-        )
+        # Get outputs (without showing output)
+        print("\n📤 Getting Terraform outputs...")
+        result = run_command("terraform output -json", cwd=infra_dir, show_output=False)
         
-        # Public Access Block
-        run_command(
-            f"aws s3api put-public-access-block "
-            f"--bucket {config.TF_STATE_BUCKET} "
-            f"--public-access-block-configuration "
-            f"BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true "
-            f"--profile {config.AWS_PROFILE}"
-        )
-        
-        log_success("S3 Bucket erstellt")
-    
-    # DynamoDB Table
-    log_info("Erstelle DynamoDB Table für State Locking...")
-    try:
-        run_command(
-            f"aws dynamodb describe-table --table-name {config.TF_LOCK_TABLE} "
-            f"--profile {config.AWS_PROFILE}",
-            capture_output=True
-        )
-        log_warning("DynamoDB Table existiert bereits")
-    except:
-        run_command(
-            f"aws dynamodb create-table "
-            f"--table-name {config.TF_LOCK_TABLE} "
-            f"--attribute-definitions AttributeName=LockID,AttributeType=S "
-            f"--key-schema AttributeName=LockID,KeyType=HASH "
-            f"--billing-mode PAY_PER_REQUEST "
-            f"--region {config.AWS_REGION} "
-            f"--profile {config.AWS_PROFILE}"
-        )
-        log_success("DynamoDB Table erstellt")
-
-
-def verify_ses_email():
-    """Verifiziert SES E-Mail"""
-    log_step("PHASE 3: AWS Services vorbereiten")
-    
-    log_info("Verifiziere SES E-Mail-Adresse...")
-    run_command(
-        f"aws ses verify-email-identity "
-        f"--email-address {config.CONTACT_EMAIL_SENDER} "
-        f"--region {config.AWS_REGION} "
-        f"--profile {config.AWS_PROFILE}"
-    )
-    
-    log_warning(f"WICHTIG: Prüfe E-Mails und bestätige SES Verifikation!")
-    log_info(f"E-Mail: {config.CONTACT_EMAIL_SENDER}")
-    print()
-    
-    if not confirm("E-Mail verifiziert?"):
-        log_warning("Bitte verifiziere die E-Mail und starte das Script erneut")
-        sys.exit(0)
-
-
-def prepare_lambda_functions():
-    """Bereitet Lambda-Funktionen vor (Dependencies werden via Lambda Layers verwaltet)"""
-    log_step("PHASE 4: Lambda-Funktionen vorbereiten")
-    
-    log_info("Lambda Dependencies werden via Terraform Lambda Layers verwaltet")
-    
-    # Lambda Layers bauen
-    log_info("Baue Lambda Layers...")
-    lambda_layers_dir = Path(config.TERRAFORM_DIR) / "modules" / "lambda-layers"
-    
-    if lambda_layers_dir.exists():
-        try:
-            import platform
-            if platform.system() == "Windows":
-                run_command("powershell -ExecutionPolicy Bypass -File build-all-layers.ps1", cwd=lambda_layers_dir)
-            else:
-                run_command("chmod +x build-all-layers.sh && ./build-all-layers.sh", cwd=lambda_layers_dir)
+        if result.stdout.strip():
+            outputs = json.loads(result.stdout)
+            print("✅ Infrastructure deployment completed successfully!")
+            print("✅ API Gateway automatically deployed via Terraform")
+            return outputs
+        else:
+            print("⚠️ No Terraform outputs found")
+            return {}
             
-            log_success("Lambda Layers gebaut")
-        except Exception as e:
-            log_error(f"Fehler beim Bauen der Lambda Layers: {e}")
-            log_warning("Bitte baue die Lambda Layers manuell:")
-            log_info("  cd TerraformInfluencerTemplate/modules/lambda-layers")
-            log_info("  ./build-all-layers.ps1  (Windows)")
-            log_info("  ./build-all-layers.sh   (Linux/Mac)")
-            raise
-    else:
-        log_warning("Lambda Layers Modul nicht gefunden - überspringe")
-    
-    # Stream Restreaming Lambda ZIPs erstellen (falls benötigt)
-    if config.ENABLE_STREAM_RESTREAMING:
-        log_info("Baue Stream Restreaming Lambda-Funktionen...")
-        restreaming_module_dir = Path(config.TERRAFORM_DIR) / "modules" / "stream-restreaming"
-        
-        if restreaming_module_dir.exists():
-            try:
-                import platform
-                if platform.system() == "Windows":
-                    build_script = restreaming_module_dir / "build-lambdas.ps1"
-                    if build_script.exists():
-                        run_command("powershell -ExecutionPolicy Bypass -File build-lambdas.ps1", cwd=restreaming_module_dir)
-                    else:
-                        log_warning("build-lambdas.ps1 nicht gefunden - erstelle ZIPs manuell")
-                        # Fallback: Erstelle ZIPs manuell
-                        import zipfile
-                        lambda_dir = restreaming_module_dir / "lambda"
-                        
-                        # lambda.zip (API Handler)
-                        with zipfile.ZipFile(restreaming_module_dir / "lambda.zip", 'w', zipfile.ZIP_DEFLATED) as zipf:
-                            zipf.write(lambda_dir / "index.py", "index.py")
-                        
-                        # monitor.zip (Stream Monitor)
-                        with zipfile.ZipFile(restreaming_module_dir / "monitor.zip", 'w', zipfile.ZIP_DEFLATED) as zipf:
-                            zipf.write(lambda_dir / "stream_monitor.py", "stream_monitor.py")
-                            zipf.write(lambda_dir / "index.py", "index.py")
-                else:
-                    build_script = restreaming_module_dir / "build-lambdas.sh"
-                    if build_script.exists():
-                        run_command("chmod +x build-lambdas.sh && ./build-lambdas.sh", cwd=restreaming_module_dir)
-                    else:
-                        log_warning("build-lambdas.sh nicht gefunden - erstelle ZIPs manuell")
-                        # Fallback: Erstelle ZIPs manuell
-                        import zipfile
-                        lambda_dir = restreaming_module_dir / "lambda"
-                        
-                        # lambda.zip (API Handler)
-                        with zipfile.ZipFile(restreaming_module_dir / "lambda.zip", 'w', zipfile.ZIP_DEFLATED) as zipf:
-                            zipf.write(lambda_dir / "index.py", "index.py")
-                        
-                        # monitor.zip (Stream Monitor)
-                        with zipfile.ZipFile(restreaming_module_dir / "monitor.zip", 'w', zipfile.ZIP_DEFLATED) as zipf:
-                            zipf.write(lambda_dir / "stream_monitor.py", "stream_monitor.py")
-                            zipf.write(lambda_dir / "index.py", "index.py")
-                
-                log_success("Stream Restreaming Lambda-Funktionen gebaut")
-            except Exception as e:
-                log_error(f"Fehler beim Bauen der Stream Restreaming Lambda-Funktionen: {e}")
-                log_warning("Bitte baue die Lambda-Funktionen manuell:")
-                log_info("  cd TerraformInfluencerTemplate/modules/stream-restreaming")
-                log_info("  ./build-lambdas.ps1  (Windows)")
-                log_info("  ./build-lambdas.sh   (Linux/Mac)")
-                raise
-        else:
-            log_warning("Stream Restreaming Modul nicht gefunden - überspringe")
-    
-    # Billing System Lambda-Funktionen bauen (falls aktiviert)
-    if config.ENABLE_BILLING_SYSTEM:
-        log_info("Baue Billing System Lambda-Funktionen...")
-        billing_module_dir = Path(config.TERRAFORM_DIR) / "modules" / "billing-system"
-        
-        if billing_module_dir.exists():
-            try:
-                import platform
-                if platform.system() == "Windows":
-                    build_script = billing_module_dir / "build-lambdas.ps1"
-                    if build_script.exists():
-                        run_command("powershell -ExecutionPolicy Bypass -File build-lambdas.ps1", cwd=billing_module_dir)
-                    else:
-                        log_warning("build-lambdas.ps1 nicht gefunden")
-                else:
-                    build_script = billing_module_dir / "build-lambdas.sh"
-                    if build_script.exists():
-                        run_command("chmod +x build-lambdas.sh && ./build-lambdas.sh", cwd=billing_module_dir)
-                    else:
-                        log_warning("build-lambdas.sh nicht gefunden")
-                
-                log_success("Billing Lambda-Funktionen gebaut")
-            except Exception as e:
-                log_error(f"Fehler beim Bauen der Billing Lambda-Funktionen: {e}")
-                log_warning("Bitte baue die Lambda-Funktionen manuell:")
-                log_info("  cd TerraformInfluencerTemplate/modules/billing-system")
-                log_info("  ./build-lambdas.ps1  (Windows)")
-                log_info("  ./build-lambdas.sh   (Linux/Mac)")
-                raise
-        else:
-            log_warning("Billing System Modul nicht gefunden - überspringe")
-    
-    log_success("Lambda-Vorbereitung abgeschlossen")
+    except json.JSONDecodeError as e:
+        print(f"❌ Failed to parse Terraform outputs: {e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ Infrastructure deployment failed: {e}")
+        sys.exit(1)
 
-
-def generate_terraform_configs():
-    """Generiert Terraform Config-Dateien"""
-    log_step("PHASE 5: Terraform Konfiguration erstellen")
+def deploy_billing_system():
+    """Deploy Billing System with Cost Explorer integration"""
+    print("\n" + "=" * 60)
+    print("💰 DEPLOYING BILLING SYSTEM")
+    print("=" * 60)
     
-    client_dir = Path(config.CLIENT_DIR)
-    client_dir.mkdir(parents=True, exist_ok=True)
-    
-    # terraform.tfvars
-    log_info("Generiere terraform.tfvars...")
-    tfvars_content = f'''# Terraform Variables für {config.CREATOR_DISPLAY_NAME}
-# Generiert automatisch
-
-project_name = "{config.CREATOR_NAME}"
-environment  = "{config.ENVIRONMENT}"
-aws_region   = "{config.AWS_REGION}"
-
-domain_name    = "{config.DOMAIN_NAME}"
-website_domain = "{config.WEBSITE_DOMAIN}"
-
-create_route53_zone = {str(config.CREATE_ROUTE53_ZONE).lower()}
-route53_zone_id     = "{config.ROUTE53_ZONE_ID}"
-
-contact_email_recipient = "{config.CONTACT_EMAIL_RECIPIENT}"
-contact_email_sender    = "{config.CONTACT_EMAIL_SENDER}"
-
-enable_ivs_streaming  = {str(config.ENABLE_IVS_STREAMING).lower()}
-enable_ivs_chat       = {str(config.ENABLE_IVS_CHAT).lower()}
-enable_user_auth      = {str(config.ENABLE_USER_AUTH).lower()}
-enable_sponsor_system = {str(config.ENABLE_SPONSOR_SYSTEM).lower()}
-enable_shop           = {str(config.ENABLE_SHOP).lower()}
-enable_video_management = {str(config.ENABLE_VIDEO_MANAGEMENT).lower()}
-enable_team_management  = {str(config.ENABLE_TEAM_MANAGEMENT).lower()}
-enable_event_management    = {str(config.ENABLE_EVENT_MANAGEMENT).lower()}
-enable_ad_management       = {str(config.ENABLE_AD_MANAGEMENT).lower()}
-enable_hero_management     = {str(config.ENABLE_HERO_MANAGEMENT).lower()}
-enable_product_management  = {str(config.ENABLE_PRODUCT_MANAGEMENT).lower()}
-enable_stream_restreaming  = {str(config.ENABLE_STREAM_RESTREAMING).lower()}
-enable_telegram_integration = {str(config.ENABLE_TELEGRAM_INTEGRATION).lower()}
-enable_email_notifications = {str(config.ENABLE_EMAIL_NOTIFICATIONS).lower()}
-
-# Telegram (deprecated - use settings table)
-telegram_bot_token = "{config.TELEGRAM_BOT_TOKEN}"
-telegram_chat_id   = "{config.TELEGRAM_CHAT_ID}"
-
-ivs_channel_name = "{config.IVS_CHANNEL_NAME}"
-ivs_channel_type = "{config.IVS_CHANNEL_TYPE}"
-
-cognito_callback_urls = {json.dumps(config.COGNITO_CALLBACK_URLS)}
-cognito_logout_urls   = {json.dumps(config.COGNITO_LOGOUT_URLS)}
-allow_user_registration = {str(config.ALLOW_USER_REGISTRATION).lower()}
-
-stripe_secret_key      = "{config.STRIPE_SECRET_KEY}"
-stripe_publishable_key = "{config.STRIPE_PUBLISHABLE_KEY}"
-
-# Billing System
-enable_billing_system  = {str(config.ENABLE_BILLING_SYSTEM).lower()}
-billing_base_fee       = {config.BILLING_BASE_FEE}
-stripe_webhook_secret  = "{config.STRIPE_WEBHOOK_SECRET}"
-
-tags = {{
-  Creator     = "{config.CREATOR_DISPLAY_NAME}"
-  Environment = "{config.ENVIRONMENT}"
-  ManagedBy   = "Terraform"
-}}
-'''
-    
-    (client_dir / "terraform.tfvars").write_text(tfvars_content)
-    log_success("terraform.tfvars erstellt")
-    
-    # backend.hcl
-    log_info("Generiere backend.hcl...")
-    backend_content = f'''# Terraform Backend Configuration
-bucket         = "{config.TF_STATE_BUCKET}"
-key            = "terraform.tfstate"
-region         = "{config.AWS_REGION}"
-encrypt        = true
-dynamodb_table = "{config.TF_LOCK_TABLE}"
-profile        = "{config.AWS_PROFILE}"
-'''
-    
-    (client_dir / "backend.hcl").write_text(backend_content)
-    log_success("backend.hcl erstellt")
-
-
-def deploy_terraform():
-    """Deployt Terraform Infrastructure"""
-    log_step("PHASE 6: Infrastructure deployen")
-    
-    tf_dir = Path(config.TERRAFORM_DIR)
-    client_dir = Path(config.CLIENT_DIR)
-    
-    # Relative Pfade vom Terraform-Verzeichnis aus
-    backend_file = client_dir.relative_to(tf_dir) / "backend.hcl"
-    tfvars_file = client_dir.relative_to(tf_dir) / "terraform.tfvars"
-    
-    log_info("Terraform initialisieren...")
-    run_command(
-        f"terraform init -backend-config={backend_file}",
-        cwd=tf_dir
-    )
-    
-    log_info("Terraform Plan erstellen...")
-    run_command(
-        f"terraform plan -var-file={tfvars_file} -out=tfplan",
-        cwd=tf_dir
-    )
-    
-    print()
-    log_warning("Prüfe den Terraform Plan!")
-    print()
-    
-    if not confirm("Infrastructure deployen?"):
-        log_warning("Deployment abgebrochen")
-        sys.exit(0)
-    
-    log_info("Deploye Infrastructure... (Dauer: 15-30 Minuten)")
-    run_command("terraform apply tfplan", cwd=tf_dir)
-    
-    log_success("Infrastructure deployed!")
-    
-    # Outputs speichern
-    log_info("Speichere Terraform Outputs...")
-    result = run_command(
-        "terraform output -json",
-        cwd=tf_dir,
-        capture_output=True
-    )
-    
-    (Path(config.CLIENT_DIR) / "outputs.json").write_text(result.stdout)
+    billing_lambda_dir = Path("viraltenant-infrastructure/lambda-functions/billing-api")
+    if not billing_lambda_dir.exists():
+        print("❌ Billing Lambda directory not found!")
+        sys.exit(1)
     
     try:
-        result = run_command(
-            "terraform output -raw ivs_stream_key",
-            cwd=tf_dir,
-            capture_output=True,
-            check=False
+        # Create Lambda ZIP using PowerShell (Windows compatible) - WITHOUT node_modules (using Lambda Layer)
+        print("\n📦 Creating Billing Lambda ZIP file (without node_modules - using Lambda Layer)...")
+        # ZIP must be in viraltenant-infrastructure folder for Terraform
+        zip_path = Path("viraltenant-infrastructure/billing_api.zip")
+        
+        # Remove old ZIP if exists
+        if zip_path.exists():
+            zip_path.unlink()
+        
+        # Use PowerShell to create ZIP excluding node_modules
+        run_command(
+            f'powershell -Command "Get-ChildItem -Path \'{billing_lambda_dir}\' -Exclude \'node_modules\',\'package-lock.json\' | Compress-Archive -DestinationPath \'{zip_path}\' -Force"'
         )
-        if result.returncode == 0:
-            stream_key_file = Path(config.CLIENT_DIR) / "stream-key.txt"
-            stream_key_file.write_text(result.stdout)
-            stream_key_file.chmod(0o600)
-    except:
-        pass
-    
-    log_success("Outputs gespeichert")
-
-
-def get_terraform_output(key):
-    """Holt Terraform Output-Wert"""
-    try:
-        result = run_command(
-            f"terraform output -raw {key}",
-            cwd=config.TERRAFORM_DIR,
-            capture_output=True,
-            check=False
-        )
-        if result.returncode == 0:
-            return result.stdout.strip()
-        return ""
-    except:
-        return ""
-
-
-def generate_frontend_configs():
-    """Generiert Frontend Config-Dateien"""
-    log_step("PHASE 7: Frontend konfigurieren")
-    
-    frontend_dir = Path(config.FRONTEND_DIR)
-    
-    # .env Datei erstellen
-    log_info("Generiere .env Datei...")
-    env_content = f'''# API Endpoints
-VITE_API_ENDPOINT={get_terraform_output("contact_form_api_endpoint")}
-
-# Cognito Configuration
-VITE_USER_POOL_ID={get_terraform_output("cognito_user_pool_id")}
-VITE_CLIENT_ID={get_terraform_output("cognito_client_id")}
-VITE_COGNITO_DOMAIN={get_terraform_output("cognito_domain")}
-
-# IVS Configuration
-VITE_IVS_PLAYBACK_URL={get_terraform_output("ivs_playback_url")}
-VITE_IVS_CHAT_ROOM_ARN={get_terraform_output("ivs_chat_room_arn")}
-
-# Video Management API
-VITE_VIDEO_API_URL={get_terraform_output("video_api_endpoint")}
-
-# Team Management API (uses same API Gateway as User API)
-VITE_TEAM_API_URL={get_terraform_output("user_api_endpoint")}
-
-# Event Management API (uses same API Gateway as User API)
-VITE_EVENT_API_URL={get_terraform_output("user_api_endpoint")}
-
-# IVS Chat API
-VITE_CHAT_API_URL={get_terraform_output("ivs_chat_api_endpoint")}
-
-# Product Management API (uses Shop API Gateway)
-VITE_PRODUCT_API_URL={get_terraform_output("product_api_endpoint")}
-
-# Channel Management API (uses same API Gateway as User API)
-VITE_CHANNEL_API_URL={get_terraform_output("channel_api_endpoint")}
-
-# Contact Info Management API (uses same API Gateway as User API)
-VITE_CONTACT_INFO_API_URL={get_terraform_output("contact_info_api_endpoint")}
-
-# Legal Management API (uses same API Gateway as User API)
-VITE_LEGAL_API_URL={get_terraform_output("legal_api_endpoint")}
-
-# Stripe Configuration (for Billing System)
-VITE_STRIPE_PUBLISHABLE_KEY={config.STRIPE_PUBLISHABLE_KEY}
-'''
-    
-    (frontend_dir / ".env").write_text(env_content)
-    log_success(".env erstellt")
-    
-    # aws-config.ts (optional, für TypeScript)
-    config_dir = frontend_dir / "src" / "config"
-    config_dir.mkdir(parents=True, exist_ok=True)
-    
-    log_info("Generiere aws-config.ts...")
-    aws_config = f'''export const awsConfig = {{
-  region: '{config.AWS_REGION}',
-  
-  cognito: {{
-    userPoolId: '{get_terraform_output("cognito_user_pool_id")}',
-    clientId: '{get_terraform_output("cognito_client_id")}',
-    domain: '{get_terraform_output("cognito_domain")}'
-  }},
-  
-  ivs: {{
-    playbackUrl: '{get_terraform_output("ivs_playback_url")}',
-    chatRoomArn: '{get_terraform_output("ivs_chat_room_arn")}'
-  }},
-  
-  api: {{
-    contactForm: '{get_terraform_output("contact_form_api_endpoint")}',
-    sponsor: '{get_terraform_output("sponsor_api_endpoint")}',
-    shop: '{get_terraform_output("shop_api_endpoint")}',
-    user: '{get_terraform_output("user_api_endpoint")}',
-    video: '{get_terraform_output("video_api_endpoint")}',
-    team: '{get_terraform_output("team_api_endpoint")}',
-    chat: '{get_terraform_output("ivs_chat_api_endpoint")}'
-  }},
-  
-  s3: {{
-    bucketName: '{get_terraform_output("s3_bucket_name")}',
-    sponsorAssets: '{get_terraform_output("sponsor_assets_bucket")}',
-    productImages: '{get_terraform_output("shop_product_images_bucket")}'
-  }},
-  
-  domain: '{config.DOMAIN_NAME}'
-}}
-'''
-    
-    (config_dir / "aws-config.ts").write_text(aws_config)
-    log_success("aws-config.ts erstellt")
-    
-    # brand.config.ts
-    log_info("Generiere brand.config.ts...")
-    brand_config = f'''export const brandConfig = {{
-  name: '{config.CREATOR_DISPLAY_NAME}',
-  tagline: 'Your Tagline',
-  domain: '{config.DOMAIN_NAME}',
-  
-  colors: {{
-    primary: '{config.BRAND_PRIMARY_COLOR}',
-    secondary: '{config.BRAND_SECONDARY_COLOR}',
-    accent: '{config.BRAND_ACCENT_COLOR}'
-  }},
-  
-  social: {{
-    youtube: '{config.SOCIAL_YOUTUBE}',
-    twitch: '{config.SOCIAL_TWITCH}',
-    instagram: '{config.SOCIAL_INSTAGRAM}',
-    twitter: '{config.SOCIAL_TWITTER}',
-    tiktok: '{config.SOCIAL_TIKTOK}',
-    telegram: '{config.SOCIAL_TELEGRAM}'
-  }},
-  
-  features: {{
-    liveStreaming: {str(config.ENABLE_IVS_STREAMING).lower()},
-    videoLibrary: true,
-    shop: {str(config.ENABLE_SHOP).lower()},
-    events: true,
-    socialChannels: true,
-    exclusiveContent: {str(config.ENABLE_USER_AUTH).lower()}
-  }}
-}}
-'''
-    
-    (config_dir / "brand.config.ts").write_text(brand_config)
-    log_success("brand.config.ts erstellt")
-
-
-def configure_email_notifications():
-    """Konfiguriert Email-Benachrichtigungen in DynamoDB"""
-    if not config.ENABLE_EMAIL_NOTIFICATIONS:
-        return
-    
-    log_step("PHASE 8: Email-Benachrichtigungen konfigurieren")
-    
-    settings_table = f"{config.CREATOR_NAME}-messaging-settings"
-    
-    # Email-Domain aus der Konfiguration
-    email_domain = config.DOMAIN_NAME
-    
-    log_info(f"Konfiguriere Email-Domain: {email_domain}")
-    
-    try:
-        # Update Email-Settings in DynamoDB using Python subprocess with proper escaping
-        key_json = json.dumps({"settingId": {"S": "email-config"}})
-        values_json = json.dumps({
-            ":domain": {"S": email_domain},
-            ":enabled": {"BOOL": True}
-        })
         
-        update_cmd = [
-            "aws", "dynamodb", "update-item",
-            "--table-name", settings_table,
-            "--key", key_json,
-            "--update-expression", "SET senderDomain = :domain, enabled = :enabled",
-            "--expression-attribute-values", values_json,
-            "--region", config.AWS_REGION,
-            "--profile", config.AWS_PROFILE
-        ]
+        # Verify ZIP was created
+        if not zip_path.exists():
+            print("❌ Failed to create Billing Lambda ZIP!")
+            sys.exit(1)
         
-        result = subprocess.run(update_cmd, capture_output=True, text=True)
-        if result.returncode == 0:
-            log_success(f"Email-Domain konfiguriert: {email_domain}")
-        else:
-            raise Exception(f"AWS CLI error: {result.stderr}")
+        print(f"✅ Billing Lambda ZIP created: {zip_path}")
+        print(f"� ZIP sizce: {zip_path.stat().st_size / 1024:.2f} KB")
+        print("📦 Dependencies provided via Lambda Layer")
         
-        # Zeige aktuelle Konfiguration
-        get_cmd = [
-            "aws", "dynamodb", "get-item",
-            "--table-name", settings_table,
-            "--key", key_json,
-            "--region", config.AWS_REGION,
-            "--profile", config.AWS_PROFILE
-        ]
-        
-        result = subprocess.run(get_cmd, capture_output=True, text=True)
-        
-        if result.returncode == 0:
-            import json
-            item = json.loads(result.stdout)
-            if 'Item' in item:
-                sender_prefix = item['Item'].get('senderPrefix', {}).get('S', 'news')
-                sender_name = item['Item'].get('senderName', {}).get('S', 'Newsfeed')
-                enabled = item['Item'].get('enabled', {}).get('BOOL', False)
-                
-                log_info(f"Email-Konfiguration:")
-                log_info(f"  Sender: {sender_name} <{sender_prefix}@{email_domain}>")
-                log_info(f"  Status: {'Aktiviert' if enabled else 'Deaktiviert'}")
+        # Note: Terraform will handle the Lambda deployment
+        print("✅ Billing Lambda prepared for Terraform deployment")
         
     except Exception as e:
-        log_warning(f"Konnte Email-Domain nicht konfigurieren: {str(e)}")
-        log_info("Bitte manuell in der Admin-Oberfläche konfigurieren")
+        print(f"❌ Billing system deployment failed: {e}")
+        sys.exit(1)
 
-
-def setup_admin_users():
-    """Fügt Admin-User zur Cognito Admin-Gruppe hinzu"""
-    if not config.ENABLE_VIDEO_MANAGEMENT or not config.ENABLE_USER_AUTH:
+def deploy_billing_cron():
+    """Deploy Billing Cron Lambda for monthly invoice generation"""
+    print("\n" + "=" * 60)
+    print("📅 DEPLOYING BILLING CRON (Monthly Invoices)")
+    print("=" * 60)
+    
+    billing_cron_dir = Path("viraltenant-infrastructure/lambda-functions/billing-cron")
+    if not billing_cron_dir.exists():
+        print("⚠️ Billing Cron directory not found, skipping...")
         return
     
-    log_step("PHASE 9: Admin-Rechte konfigurieren")
+    try:
+        # Create Lambda ZIP using PowerShell (Windows compatible) - WITHOUT node_modules (using Lambda Layer)
+        print("\n📦 Creating Billing Cron Lambda ZIP file (without node_modules - using Lambda Layer)...")
+        # ZIP must be in viraltenant-infrastructure folder for Terraform
+        zip_path = Path("viraltenant-infrastructure/billing_cron.zip")
+        
+        # Remove old ZIP if exists
+        if zip_path.exists():
+            zip_path.unlink()
+        
+        # Use PowerShell to create ZIP excluding node_modules
+        run_command(
+            f'powershell -Command "Get-ChildItem -Path \'{billing_cron_dir}\' -Exclude \'node_modules\',\'package-lock.json\' | Compress-Archive -DestinationPath \'{zip_path}\' -Force"'
+        )
+        
+        # Verify ZIP was created
+        if not zip_path.exists():
+            print("❌ Failed to create Billing Cron Lambda ZIP!")
+            sys.exit(1)
+        
+        print(f"✅ Billing Cron Lambda ZIP created: {zip_path}")
+        print(f"📊 ZIP size: {zip_path.stat().st_size / 1024:.2f} KB")
+        print("📦 Dependencies provided via Lambda Layer")
+        
+        print("✅ Billing Cron Lambda prepared for Terraform deployment")
+        print("📅 Schedule: 1st of every month at 6:00 AM UTC")
+        
+    except Exception as e:
+        print(f"❌ Billing Cron deployment failed: {e}")
+        # Don't exit, as this is optional
+        print("⚠️ Continuing without Billing Cron...")
+
+def deploy_tenant_authorizer():
+    """Deploy Tenant Authorizer Lambda with billing-admin group support"""
+    print("\n" + "=" * 60)
+    print("🔐 DEPLOYING TENANT AUTHORIZER")
+    print("=" * 60)
     
-    user_pool_id = get_terraform_output("cognito_user_pool_id")
-    admin_group = get_terraform_output("admin_group_name")
-    
-    if not user_pool_id or not admin_group:
-        log_warning("Cognito User Pool oder Admin-Gruppe nicht gefunden - überspringe Admin-Setup")
+    authorizer_dir = Path("viraltenant-infrastructure/lambda-functions/tenant-authorizer")
+    if not authorizer_dir.exists():
+        print("⚠️ Tenant Authorizer directory not found, skipping...")
         return
     
-    log_info(f"Admin-Gruppe: {admin_group}")
-    log_info(f"User Pool: {user_pool_id}")
+    try:
+        # Create Lambda ZIP using PowerShell (Windows compatible) - WITHOUT node_modules (using Lambda Layer)
+        print("\n📦 Creating Tenant Authorizer Lambda ZIP file (without node_modules - using Lambda Layer)...")
+        # ZIP must be in viraltenant-infrastructure folder for Terraform
+        zip_path = Path("viraltenant-infrastructure/tenant_authorizer.zip")
+        
+        # Remove old ZIP if exists
+        if zip_path.exists():
+            zip_path.unlink()
+        
+        # Use PowerShell to create ZIP excluding node_modules
+        run_command(
+            f'powershell -Command "Get-ChildItem -Path \'{authorizer_dir}\' -Exclude \'node_modules\',\'package-lock.json\' | Compress-Archive -DestinationPath \'{zip_path}\' -Force"'
+        )
+        
+        # Verify ZIP was created
+        if not zip_path.exists():
+            print("❌ Failed to create Tenant Authorizer Lambda ZIP!")
+            sys.exit(1)
+        
+        print(f"✅ Tenant Authorizer Lambda ZIP created: {zip_path}")
+        print(f"📊 ZIP size: {zip_path.stat().st_size / 1024:.2f} KB")
+        print("📦 Dependencies provided via Lambda Layer")
+        
+        print("✅ Tenant Authorizer Lambda prepared for Terraform deployment")
+        print("🔐 Supports: billing-admins group for /billing/admin/* endpoints")
+        
+    except Exception as e:
+        print(f"❌ Tenant Authorizer deployment failed: {e}")
+        # Don't exit, as this is optional
+        print("⚠️ Continuing without Tenant Authorizer update...")
+
+def deploy_stripe_webhook():
+    """Deploy Stripe Webhook Lambda (backup for EventBridge)"""
+    print("\n" + "=" * 60)
+    print("💳 DEPLOYING STRIPE WEBHOOK LAMBDA")
+    print("=" * 60)
     
-    for email in config.ADMIN_EMAILS:
+    webhook_dir = Path("viraltenant-infrastructure/lambda-functions/stripe-webhook")
+    if not webhook_dir.exists():
+        print("⚠️ Stripe Webhook directory not found, skipping...")
+        return
+    
+    try:
+        # Create Lambda ZIP using PowerShell - code only, deps from Lambda Layer
+        print("\n📦 Creating Stripe Webhook Lambda ZIP file (code only - using Lambda Layer)...")
+        zip_path = Path("viraltenant-infrastructure/stripe_webhook.zip")
+        
+        # Remove old ZIP if exists
+        if zip_path.exists():
+            zip_path.unlink()
+        
+        # Use PowerShell to create ZIP - only JS files
+        run_command(
+            f'powershell -Command "Get-ChildItem -Path \'{webhook_dir}\\*.js\' | Compress-Archive -DestinationPath \'{zip_path}\' -Force"'
+        )
+        
+        # Verify ZIP was created
+        if not zip_path.exists():
+            print("❌ Failed to create Stripe Webhook Lambda ZIP!")
+            sys.exit(1)
+        
+        print(f"✅ Stripe Webhook Lambda ZIP created: {zip_path}")
+        print(f"📊 ZIP size: {zip_path.stat().st_size / 1024:.2f} KB")
+        print("📦 Dependencies provided via Lambda Layer")
+        
+        print("✅ Stripe Webhook Lambda prepared for Terraform deployment")
+        print("💳 Backup webhook handler for classic Stripe webhooks")
+        
+    except Exception as e:
+        print(f"❌ Stripe Webhook deployment failed: {e}")
+        print("⚠️ Continuing without Stripe Webhook...")
+
+def deploy_stripe_eventbridge_handler():
+    """Deploy Stripe EventBridge Handler Lambda"""
+    print("\n" + "=" * 60)
+    print("⚡ DEPLOYING STRIPE EVENTBRIDGE HANDLER")
+    print("=" * 60)
+    
+    handler_dir = Path("viraltenant-infrastructure/lambda-functions/stripe-eventbridge-handler")
+    if not handler_dir.exists():
+        print("⚠️ Stripe EventBridge Handler directory not found, skipping...")
+        return
+    
+    try:
+        # Create Lambda ZIP using PowerShell - code only, deps from Lambda Layer
+        print("\n📦 Creating Stripe EventBridge Handler Lambda ZIP file (code only - using Lambda Layer)...")
+        zip_path = Path("viraltenant-infrastructure/stripe_eventbridge_handler.zip")
+        
+        # Remove old ZIP if exists
+        if zip_path.exists():
+            zip_path.unlink()
+        
+        # Use PowerShell to create ZIP - only JS files
+        run_command(
+            f'powershell -Command "Get-ChildItem -Path \'{handler_dir}\\*.js\' | Compress-Archive -DestinationPath \'{zip_path}\' -Force"'
+        )
+        
+        # Verify ZIP was created
+        if not zip_path.exists():
+            print("❌ Failed to create Stripe EventBridge Handler Lambda ZIP!")
+            sys.exit(1)
+        
+        print(f"✅ Stripe EventBridge Handler Lambda ZIP created: {zip_path}")
+        print(f"📊 ZIP size: {zip_path.stat().st_size / 1024:.2f} KB")
+        print("📦 Dependencies provided via Lambda Layer")
+        
+        print("✅ Stripe EventBridge Handler Lambda prepared for Terraform deployment")
+        print("⚡ Processes Stripe events via Amazon EventBridge Partner Integration")
+        
+    except Exception as e:
+        print(f"❌ Stripe EventBridge Handler deployment failed: {e}")
+        print("⚠️ Continuing without Stripe EventBridge Handler...")
+
+def deploy_crosspost_lambdas():
+    """Deploy all Crosspost Lambda functions"""
+    print("\n" + "=" * 60)
+    print("📤 DEPLOYING CROSSPOST LAMBDAS")
+    print("=" * 60)
+    
+    crosspost_lambdas = [
+        "tenant-crosspost-tiktok",
+        "tenant-crosspost-youtube",
+        "tenant-crosspost-instagram",
+        "tenant-crosspost-facebook",
+        "tenant-crosspost-xtwitter",
+        "tenant-crosspost-linkedin",
+        "tenant-crosspost-telegram",
+        "tenant-crosspost-discord",
+        "tenant-crosspost-slack",
+        "tenant-crosspost-bluesky",
+        "tenant-crosspost-mastodon",
+        "tenant-crosspost-snapchat",
+        "tenant-crosspost-dispatcher",
+    ]
+    
+    for lambda_name in crosspost_lambdas:
+        lambda_dir = Path(f"viraltenant-infrastructure/lambda-functions/{lambda_name}")
+        if not lambda_dir.exists():
+            print(f"⚠️ {lambda_name} directory not found, skipping...")
+            continue
+        
         try:
-            log_info(f"Füge {email} zur Admin-Gruppe hinzu...")
+            # Create Lambda ZIP using PowerShell - code only, deps from Lambda Layer
+            zip_name = lambda_name.replace("-", "_") + ".zip"
+            zip_path = Path(f"viraltenant-infrastructure/{zip_name}")
             
-            # Prüfe ob User existiert
-            check_cmd = f'aws cognito-idp admin-get-user --user-pool-id {user_pool_id} --username "{email}" --region {config.AWS_REGION} --profile {config.AWS_PROFILE}'
-            result = subprocess.run(check_cmd, shell=True, capture_output=True, text=True)
+            # Remove old ZIP if exists
+            if zip_path.exists():
+                zip_path.unlink()
             
-            if result.returncode != 0:
-                log_warning(f"User {email} existiert noch nicht - muss sich erst registrieren")
-                continue
+            # Use PowerShell to create ZIP - only JS files
+            run_command(
+                f'powershell -Command "Get-ChildItem -Path \'{lambda_dir}\\*.js\' | Compress-Archive -DestinationPath \'{zip_path}\' -Force"',
+                show_output=False
+            )
             
-            # Füge zur Admin-Gruppe hinzu
-            add_cmd = f'aws cognito-idp admin-add-user-to-group --user-pool-id {user_pool_id} --username "{email}" --group-name {admin_group} --region {config.AWS_REGION} --profile {config.AWS_PROFILE}'
-            run_command(add_cmd)
-            
-            log_success(f"✓ {email} ist jetzt Admin")
-            
+            # Verify ZIP was created
+            if zip_path.exists():
+                print(f"✅ {lambda_name}: {zip_path.stat().st_size / 1024:.2f} KB")
+            else:
+                print(f"⚠️ {lambda_name}: Failed to create ZIP")
+                
         except Exception as e:
-            log_warning(f"Konnte {email} nicht zur Admin-Gruppe hinzufügen: {str(e)}")
+            print(f"⚠️ {lambda_name}: {e}")
     
-    log_success("Admin-Setup abgeschlossen")
+    print("\n✅ Crosspost Lambdas prepared for Terraform deployment")
+    print("📦 Dependencies provided via Lambda Layer")
+
+def deploy_whatsapp_lambdas():
+    """Deploy WhatsApp Lambda functions for AWS End User Messaging Social"""
+    print("\n" + "=" * 60)
+    print("📱 DEPLOYING WHATSAPP LAMBDAS")
+    print("=" * 60)
+    
+    whatsapp_lambdas = [
+        ("tenant-whatsapp-subscription", "tenant_whatsapp_subscription.zip"),
+        ("tenant-crosspost-whatsapp", "tenant_crosspost_whatsapp.zip"),
+        ("tenant-whatsapp-worker", "tenant_whatsapp_worker.zip"),
+        ("tenant-whatsapp-settings", "tenant_whatsapp_settings.zip"),
+    ]
+    
+    for lambda_name, zip_name in whatsapp_lambdas:
+        lambda_dir = Path(f"viraltenant-infrastructure/lambda-functions/{lambda_name}")
+        if not lambda_dir.exists():
+            print(f"⚠️ {lambda_name} directory not found, skipping...")
+            continue
+        
+        try:
+            zip_path = Path(f"viraltenant-infrastructure/{zip_name}")
+            
+            # Remove old ZIP if exists
+            if zip_path.exists():
+                zip_path.unlink()
+            
+            # Use PowerShell to create ZIP - only JS files
+            run_command(
+                f'powershell -Command "Get-ChildItem -Path \'{lambda_dir}\\*.js\' | Compress-Archive -DestinationPath \'{zip_path}\' -Force"',
+                show_output=False
+            )
+            
+            # Verify ZIP was created
+            if zip_path.exists():
+                print(f"✅ {lambda_name}: {zip_path.stat().st_size / 1024:.2f} KB")
+            else:
+                print(f"⚠️ {lambda_name}: Failed to create ZIP")
+                
+        except Exception as e:
+            print(f"⚠️ {lambda_name}: {e}")
+    
+    print("\n✅ WhatsApp Lambdas prepared for Terraform deployment")
+    print("📱 Uses AWS End User Messaging Social for WhatsApp broadcasts")
 
 
-def deploy_frontend():
-    """Deployt Frontend"""
-    log_step("PHASE 10: Frontend bauen & deployen")
+def deploy_membership_lambda():
+    """Deploy Tenant Membership Lambda for Mollie Split Payments"""
+    print("\n" + "=" * 60)
+    print("👑 DEPLOYING MEMBERSHIP LAMBDA")
+    print("=" * 60)
     
-    frontend_dir = Path(config.FRONTEND_DIR)
+    membership_dir = Path("viraltenant-infrastructure/lambda-functions/tenant-membership")
+    if not membership_dir.exists():
+        print("⚠️ Membership Lambda directory not found, skipping...")
+        return
     
-    log_info("Installiere Dependencies...")
-    run_command("npm install", cwd=frontend_dir)
+    try:
+        zip_path = Path("viraltenant-infrastructure/tenant_membership.zip")
+        
+        # Remove old ZIP if exists
+        if zip_path.exists():
+            zip_path.unlink()
+        
+        # Use PowerShell to create ZIP - only JS files
+        run_command(
+            f'powershell -Command "Get-ChildItem -Path \'{membership_dir}\\*.js\' | Compress-Archive -DestinationPath \'{zip_path}\' -Force"',
+            show_output=False
+        )
+        
+        # Verify ZIP was created
+        if zip_path.exists():
+            print(f"✅ tenant-membership: {zip_path.stat().st_size / 1024:.2f} KB")
+        else:
+            print("⚠️ tenant-membership: Failed to create ZIP")
+            
+    except Exception as e:
+        print(f"⚠️ tenant-membership: {e}")
     
-    log_info("Erstelle Production Build...")
-    run_command("npm run build", cwd=frontend_dir)
-    
-    log_info("Deploye zu S3...")
-    bucket = get_terraform_output("s3_bucket_name")
-    dist_id = get_terraform_output("cloudfront_distribution_id")
-    
-    run_command(
-        f"aws s3 sync dist/ s3://{bucket}/ --delete --profile {config.AWS_PROFILE}",
-        cwd=frontend_dir
-    )
-    
-    log_info("Invalidiere CloudFront Cache...")
-    run_command(
-        f'aws cloudfront create-invalidation --distribution-id {dist_id} --paths "/*" --profile {config.AWS_PROFILE}'
-    )
-    
-    log_success("Frontend deployed!")
+    print("\n✅ Membership Lambda prepared for Terraform deployment")
+    print("👑 Mollie Split Payments für Tenant-Mitgliedschaften")
 
 
-def show_summary():
-    """Zeigt Deployment-Zusammenfassung"""
-    log_step("DEPLOYMENT ABGESCHLOSSEN!")
+def build_lambda_layer():
+    """Build the common dependencies Lambda Layer - only if changed"""
+    print("\n" + "=" * 60)
+    print("📦 BUILDING LAMBDA LAYER (Common Dependencies)")
+    print("=" * 60)
     
-    print()
-    print("=" * 50)
-    print("WICHTIGE INFORMATIONEN")
-    print("=" * 50)
-    print()
-    print("Lambda Layers:")
-    print("   Dependencies via Terraform Lambda Layers verwaltet")
-    print("   -> 99% kleinere Packages (50 MB -> 5 KB)")
-    print("   -> 95% schnellere Deployments (2-3 Min -> 15 Sek)")
-    print("   -> 25% schnellere Cold Starts")
-    print()
-    print("Website URL:")
-    print(f"   https://{config.WEBSITE_DOMAIN}")
-    print()
-    if config.ENABLE_IVS_STREAMING:
-        print("IVS Streaming:")
-        print(f"   Ingest: {get_terraform_output('ivs_ingest_endpoint')}")
-        print(f"   Stream Key: Siehe {config.CLIENT_DIR}/stream-key.txt")
-        print()
+    layer_dir = Path("viraltenant-infrastructure/lambda-layers/common-deps/nodejs")
+    zip_path = Path("viraltenant-infrastructure/lambda-layers/common-deps/common-deps-layer.zip")
+    package_json = layer_dir / "package.json"
+    package_lock = layer_dir / "package-lock.json"
     
-    if config.ENABLE_IVS_CHAT:
-        print("IVS Chat:")
-        print(f"   Chat Room ARN: {get_terraform_output('ivs_chat_room_arn')}")
-        print(f"   Chat API: {get_terraform_output('ivs_chat_api_endpoint')}")
-        print()
+    if not layer_dir.exists():
+        print("❌ Lambda Layer directory not found!")
+        sys.exit(1)
     
-    print("Cognito:")
-    print(f"   User Pool: {get_terraform_output('cognito_user_pool_id')}")
-    print(f"   Client ID: {get_terraform_output('cognito_client_id')}")
-    print()
-    print("CloudFront:")
-    print(f"   Distribution: {get_terraform_output('cloudfront_distribution_id')}")
-    print()
-    print("S3 Bucket:")
-    print(f"   {get_terraform_output('s3_bucket_name')}")
-    print()
+    # Check if rebuild is needed
+    if zip_path.exists() and package_json.exists():
+        zip_mtime = zip_path.stat().st_mtime
+        pkg_mtime = package_json.stat().st_mtime
+        lock_mtime = package_lock.stat().st_mtime if package_lock.exists() else 0
+        
+        # Only rebuild if package.json or package-lock.json is newer than ZIP
+        if zip_mtime > pkg_mtime and zip_mtime > lock_mtime:
+            zip_size = zip_path.stat().st_size / (1024*1024)
+            print(f"✅ Lambda Layer ZIP is up-to-date ({zip_size:.2f} MB), skipping rebuild")
+            print("💡 Delete the ZIP file to force a rebuild")
+            return
+        else:
+            print("🔄 Dependencies changed, rebuilding Lambda Layer...")
+    else:
+        print("🆕 Lambda Layer ZIP not found, building...")
     
-    if config.ENABLE_VIDEO_MANAGEMENT:
-        print("Video Management:")
-        print(f"   API: {get_terraform_output('video_api_endpoint')}")
-        print(f"   Videos Bucket: {get_terraform_output('videos_bucket')}")
-        print(f"   Thumbnails CDN: {get_terraform_output('thumbnails_cdn_url')}")
-        print(f"   Admin-Gruppe: {get_terraform_output('admin_group_name')}")
-        print()
-    
-    if config.ENABLE_TEAM_MANAGEMENT:
-        print("Team Management:")
-        print(f"   API: {get_terraform_output('team_api_endpoint')}")
-        print(f"   Team Members Table: {get_terraform_output('team_members_table')}")
-        print(f"   Images: {get_terraform_output('team_images_info')}")
-        print()
-    
-    if config.ENABLE_VIDEO_MANAGEMENT or config.ENABLE_TEAM_MANAGEMENT:
-        print("   Admins:")
-        for email in config.ADMIN_EMAILS:
-            print(f"      - {email}")
-        print()
-    
-    print("=" * 50)
-    print()
-    
-    log_warning("NÄCHSTE SCHRITTE:")
-    print()
-    print("1. DNS konfigurieren:")
-    print("   - Nameservers bei Domain-Registrar eintragen")
-    print()
-    print("2. SES Production Access beantragen")
-    print()
-    print("3. Assets hinzufügen (Logo, Favicon)")
-    print()
-    print("4. Website testen")
-    print(f"   - https://{config.WEBSITE_DOMAIN}")
-    print()
-    
-    if config.ENABLE_VIDEO_MANAGEMENT:
-        print("5. Admin-User registrieren:")
-        print("   - Admins müssen sich erst auf der Website registrieren")
-        print("   - Dann erneut deploy.py ausführen um Admin-Rechte zu vergeben")
-        print()
-    
-    log_success("Deployment erfolgreich abgeschlossen!")
+    try:
+        # Install dependencies
+        print("\n📦 Installing Lambda Layer dependencies...")
+        run_command("npm install --production", cwd=layer_dir)
+        
+        # Create Lambda Layer ZIP
+        print("\n📦 Creating Lambda Layer ZIP file...")
+        
+        # Remove old ZIP if exists
+        if zip_path.exists():
+            zip_path.unlink()
+        
+        # Use PowerShell to create ZIP (must include nodejs folder structure)
+        nodejs_parent = layer_dir.parent  # common-deps folder
+        run_command(
+            f'powershell -Command "Compress-Archive -Path \'{nodejs_parent}\\nodejs\' -DestinationPath \'{zip_path}\' -Force"'
+        )
+        
+        # Verify ZIP was created
+        if not zip_path.exists():
+            print("❌ Failed to create Lambda Layer ZIP!")
+            sys.exit(1)
+        
+        print(f"✅ Lambda Layer ZIP created: {zip_path}")
+        print(f"📊 ZIP size: {zip_path.stat().st_size / (1024*1024):.2f} MB")
+        print("📦 Contains: AWS SDK, Stripe, PDFKit, UUID, etc.")
+        
+        print("✅ Lambda Layer prepared for Terraform deployment")
+        
+    except Exception as e:
+        print(f"❌ Lambda Layer build failed: {e}")
+        sys.exit(1)
 
+def deploy_tenant_management():
+    """Deploy Tenant Management Lambda"""
+    print("\n" + "=" * 60)
+    print("👥 DEPLOYING TENANT MANAGEMENT")
+    print("=" * 60)
+    
+    tenant_mgmt_dir = Path("viraltenant-infrastructure/lambda-functions/tenant-management")
+    if not tenant_mgmt_dir.exists():
+        print("⚠️ Tenant Management directory not found, skipping...")
+        return
+    
+    try:
+        # Create Lambda ZIP using PowerShell (Windows compatible) - WITHOUT node_modules (using Lambda Layer)
+        print("\n📦 Creating Tenant Management Lambda ZIP file (without node_modules - using Lambda Layer)...")
+        zip_path = Path("tenant_management.zip")
+        
+        # Remove old ZIP if exists
+        if zip_path.exists():
+            zip_path.unlink()
+        
+        # Use PowerShell to create ZIP excluding node_modules
+        run_command(
+            f'powershell -Command "Get-ChildItem -Path \'{tenant_mgmt_dir}\' -Exclude \'node_modules\',\'package-lock.json\' | Compress-Archive -DestinationPath \'tenant_management.zip\' -Force"'
+        )
+        
+        # Verify ZIP was created
+        if not zip_path.exists():
+            print("❌ Failed to create Tenant Management Lambda ZIP!")
+            sys.exit(1)
+        
+        print(f"✅ Tenant Management Lambda ZIP created: {zip_path}")
+        print(f"📊 ZIP size: {zip_path.stat().st_size / 1024:.2f} KB")
+        print("📦 Dependencies provided via Lambda Layer")
+        
+        print("✅ Tenant Management Lambda prepared for Terraform deployment")
+        
+    except Exception as e:
+        print(f"❌ Tenant Management deployment failed: {e}")
+        # Don't exit, as this is optional
+        print("⚠️ Continuing without Tenant Management update...")
+
+def deploy_auth_handler():
+    """Deploy Auth Handler Lambda (central-auth module)"""
+    print("\n" + "=" * 60)
+    print("🔑 DEPLOYING AUTH HANDLER")
+    print("=" * 60)
+    
+    # Auth handler is in modules/central-auth/lambda/
+    auth_handler_dir = Path("viraltenant-infrastructure/modules/central-auth/lambda")
+    if not auth_handler_dir.exists():
+        print("⚠️ Auth Handler directory not found, skipping...")
+        return
+    
+    try:
+        # Create Lambda ZIP using PowerShell (Windows compatible) - WITHOUT node_modules (using Lambda Layer)
+        print("\n📦 Creating Auth Handler Lambda ZIP file (without node_modules - using Lambda Layer)...")
+        # ZIP must be in viraltenant-infrastructure folder for Terraform
+        zip_path = Path("viraltenant-infrastructure/auth_handler.zip")
+        
+        # Remove old ZIP if exists
+        if zip_path.exists():
+            zip_path.unlink()
+        
+        # Use PowerShell to create ZIP - only index.js file
+        run_command(
+            f'powershell -Command "Compress-Archive -Path \'{auth_handler_dir}\\index.js\' -DestinationPath \'{zip_path}\' -Force"'
+        )
+        
+        # Verify ZIP was created
+        if not zip_path.exists():
+            print("❌ Failed to create Auth Handler Lambda ZIP!")
+            sys.exit(1)
+        
+        print(f"✅ Auth Handler Lambda ZIP created: {zip_path}")
+        print(f"📊 ZIP size: {zip_path.stat().st_size / 1024:.2f} KB")
+        print("📦 Dependencies provided via Lambda Layer")
+        
+        print("✅ Auth Handler Lambda prepared for Terraform deployment")
+        
+    except Exception as e:
+        print(f"❌ Auth Handler deployment failed: {e}")
+        # Don't exit, as this is optional
+        print("⚠️ Continuing without Auth Handler update...")
+
+def deploy_billing_config(s3_bucket):
+    """Deploy Billing Configuration and Logo to S3"""
+    print("\n" + "=" * 60)
+    print("📄 DEPLOYING BILLING CONFIGURATION")
+    print("=" * 60)
+    
+    config_path = Path("viraltenant-infrastructure/config/billing-config.json")
+    logo_path = Path("viraltenant-infrastructure/assets/viraltenant-logo.png")
+    
+    try:
+        # Upload billing config
+        if config_path.exists():
+            print(f"\n📤 Uploading billing-config.json to S3...")
+            run_command(
+                f'aws s3 cp "{config_path}" s3://{s3_bucket}/config/billing-config.json --content-type "application/json"'
+            )
+            print("✅ billing-config.json uploaded")
+            
+            # Check if config has placeholders
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config_content = f.read()
+                if '[FIRMENNAME EINTRAGEN]' in config_content or '[IBAN' in config_content:
+                    print("\n⚠️  WICHTIG: billing-config.json enthält noch Platzhalter!")
+                    print("   Bitte füllen Sie die Datei mit Ihren echten Firmendaten aus:")
+                    print(f"   📁 {config_path}")
+        else:
+            print(f"⚠️ billing-config.json not found at {config_path}")
+        
+        # Upload logo if exists
+        if logo_path.exists():
+            print(f"\n📤 Uploading viraltenant-logo.png to S3...")
+            run_command(
+                f'aws s3 cp "{logo_path}" s3://{s3_bucket}/assets/viraltenant-logo.png --content-type "image/png"'
+            )
+            print("✅ viraltenant-logo.png uploaded")
+        else:
+            print(f"\n⚠️ Logo not found at {logo_path}")
+            print("   Bitte fügen Sie Ihr Firmenlogo hinzu für die Rechnungen:")
+            print(f"   📁 {logo_path}")
+            print("   📐 Empfohlene Größe: 360x120 Pixel (PNG)")
+        
+        print("\n✅ Billing configuration deployment completed")
+        
+    except Exception as e:
+        print(f"❌ Billing config deployment failed: {e}")
+        print("⚠️ Continuing without billing config...")
+
+def deploy_static_pages(s3_bucket):
+    """Deploy static HTML pages (tenant-creation, etc.) to S3"""
+    print("\n" + "=" * 60)
+    print("📄 DEPLOYING STATIC PAGES")
+    print("=" * 60)
+    
+    static_pages_dir = Path("viraltenant-infrastructure/static-pages")
+    if not static_pages_dir.exists():
+        print("⚠️ Static pages directory not found, skipping...")
+        return
+    
+    try:
+        # List of static pages to deploy
+        static_pages = [
+            ("tenant-creation.html", "tenant-creation.html"),
+            ("tenant-creation.html", "tenant-registration.html"),  # Also deploy as tenant-registration.html for backward compatibility
+        ]
+        
+        for source_file, dest_file in static_pages:
+            source_path = static_pages_dir / source_file
+            if source_path.exists():
+                print(f"\n📤 Uploading {dest_file} to S3...")
+                run_command(
+                    f'aws s3 cp "{source_path}" s3://{s3_bucket}/{dest_file} --content-type "text/html" --cache-control "public, max-age=3600"'
+                )
+                print(f"✅ {dest_file} uploaded")
+            else:
+                print(f"⚠️ {source_file} not found at {source_path}")
+        
+        print("\n✅ Static pages deployment completed")
+        
+    except Exception as e:
+        print(f"❌ Static pages deployment failed: {e}")
+        print("⚠️ Continuing without static pages...")
+
+def deploy_billing_dashboard(outputs):
+    """Deploy Billing Admin Dashboard to its own S3 bucket"""
+    print("\n" + "=" * 60)
+    print("📊 DEPLOYING BILLING ADMIN DASHBOARD")
+    print("=" * 60)
+    
+    billing_dir = Path("viraltenant-billing")
+    if not billing_dir.exists():
+        print("⚠️ Billing dashboard directory not found, skipping...")
+        return
+    
+    # Get billing dashboard bucket from outputs
+    billing_bucket = outputs.get("billing_dashboard_bucket", {}).get("value")
+    billing_url = outputs.get("billing_dashboard_url", {}).get("value")
+    billing_cf_id = outputs.get("billing_dashboard_cloudfront_id", {}).get("value")
+    
+    if not billing_bucket:
+        print("⚠️ Billing dashboard bucket not found in Terraform outputs, skipping...")
+        return
+    
+    try:
+        # Upload billing dashboard files
+        print(f"\n📤 Uploading billing dashboard to S3: {billing_bucket}")
+        run_command(
+            f'aws s3 sync "{billing_dir}" s3://{billing_bucket}/ --delete'
+        )
+        print("✅ Billing dashboard uploaded")
+        
+        # Invalidate CloudFront cache
+        if billing_cf_id:
+            print(f"\n🔄 Invalidating CloudFront cache: {billing_cf_id}")
+            run_command(
+                f'aws cloudfront create-invalidation --distribution-id {billing_cf_id} --paths "/*"',
+                show_output=False
+            )
+            print("✅ CloudFront cache invalidated")
+        
+        print(f"\n🌐 Billing Dashboard URL: {billing_url}")
+        
+    except Exception as e:
+        print(f"❌ Billing dashboard deployment failed: {e}")
+        print("⚠️ Continuing without billing dashboard...")
+
+def build_and_deploy_frontend(s3_bucket):
+    """Build and deploy React frontend"""
+    print("\n" + "=" * 60)
+    print("⚛️ BUILDING AND DEPLOYING FRONTEND")
+    print("=" * 60)
+    print(f"📦 Target S3 Bucket: {s3_bucket}")
+    
+    frontend_dir = Path("viraltenant-react")
+    if not frontend_dir.exists():
+        print("❌ Frontend directory not found!")
+        sys.exit(1)
+    
+    try:
+        # Install dependencies
+        print("\n📦 Installing npm dependencies...")
+        run_command("npm install", cwd=frontend_dir)
+        
+        # Build frontend
+        print("\n🔨 Building React application...")
+        run_command("npm run build", cwd=frontend_dir)
+        
+        # Check build output
+        dist_dir = frontend_dir / "dist"
+        if not dist_dir.exists():
+            print("❌ Build failed - dist directory not found!")
+            sys.exit(1)
+        
+        print(f"✅ Build completed successfully!")
+        print(f"📁 Build output: {dist_dir}")
+        
+        # Deploy to S3
+        print(f"\n📤 Uploading to S3 bucket: {s3_bucket}")
+        
+        # Upload static assets with long cache (exclude invoices, config, assets, and static pages that are managed separately)
+        print("📄 Uploading static assets (CSS, JS, images)...")
+        run_command(f'aws s3 sync "{dist_dir}" s3://{s3_bucket}/ --delete --cache-control "public, max-age=31536000" --exclude "*.html" --exclude "invoices/*" --exclude "config/*" --exclude "assets/viraltenant-logo.png" --exclude "tenant-creation.html" --exclude "tenant-registration.html"')
+        
+        # Upload HTML files with short cache
+        print("📄 Uploading HTML files...")
+        run_command(f'aws s3 sync "{dist_dir}" s3://{s3_bucket}/ --exclude "*" --include "*.html" --cache-control "public, max-age=3600"')
+        
+        print("✅ Frontend deployed successfully!")
+        
+    except Exception as e:
+        print(f"❌ Frontend deployment failed: {e}")
+        sys.exit(1)
+
+def invalidate_cloudfront(distribution_id):
+    """Invalidate CloudFront cache"""
+    print("\n" + "=" * 60)
+    print("🔄 INVALIDATING CLOUDFRONT CACHE")
+    print("=" * 60)
+    print(f"🌐 Distribution ID: {distribution_id}")
+    
+    try:
+        print("\n🚀 Creating CloudFront invalidation...")
+        result = run_command(f'aws cloudfront create-invalidation --distribution-id {distribution_id} --paths "/*"', show_output=False)
+        
+        if result.stdout:
+            try:
+                data = json.loads(result.stdout)
+                invalidation_id = data["Invalidation"]["Id"]
+                status = data["Invalidation"]["Status"]
+                
+                print(f"✅ Invalidation created successfully!")
+                print(f"🆔 Invalidation ID: {invalidation_id}")
+                print(f"📊 Status: {status}")
+                print("⏳ Cache invalidation is in progress...")
+                print("💡 It may take 5-15 minutes to complete globally")
+                
+            except json.JSONDecodeError:
+                print("⚠️ Invalidation created but could not parse response")
+        else:
+            print("⚠️ Invalidation command completed but no output received")
+            
+    except Exception as e:
+        print(f"❌ CloudFront invalidation failed: {e}")
+        print("⚠️ Website may still work but cache might be stale")
+        # Don't exit here, as this is not critical
+
+def update_frontend_config(outputs):
+    """Update frontend configuration with Terraform outputs"""
+    print("\n" + "=" * 60)
+    print("⚙️ UPDATING FRONTEND CONFIGURATION")
+    print("=" * 60)
+    
+    try:
+        config_path = Path("viraltenant-react/src/config/aws-config.ts")
+        if not config_path.exists():
+            print("❌ Frontend config file not found!")
+            return
+        
+        # Read current config
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config_content = f.read()
+        
+        # Extract values from Terraform outputs
+        api_url = outputs.get("api_gateway_url", {}).get("value", "")
+        user_pool_id = outputs.get("cognito_user_pool_id", {}).get("value", "")
+        client_id = outputs.get("cognito_client_id", {}).get("value", "")
+        
+        if api_url and user_pool_id and client_id:
+            print(f"🔧 API Gateway URL: {api_url}")
+            print(f"🔧 User Pool ID: {user_pool_id}")
+            print(f"🔧 Client ID: {client_id}")
+            
+            # Replace placeholders
+            config_content = config_content.replace('API_GATEWAY_URL_PLACEHOLDER', api_url)
+            config_content = config_content.replace('USER_POOL_ID_PLACEHOLDER', user_pool_id)
+            config_content = config_content.replace('CLIENT_ID_PLACEHOLDER', client_id)
+            
+            # Write updated config
+            with open(config_path, 'w', encoding='utf-8') as f:
+                f.write(config_content)
+            
+            print("✅ Frontend configuration updated successfully!")
+        else:
+            print("⚠️ Missing required Terraform outputs for frontend config")
+            
+    except Exception as e:
+        print(f"❌ Failed to update frontend config: {e}")
+        # Don't exit, as this is not critical
 
 def main():
-    """Hauptfunktion"""
-    import argparse
+    """Main deployment function"""
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description='ViralTenant Platform Deployment Script',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python deploy.py                    # Full deployment
+  python deploy.py --frontend         # Frontend only
+  python deploy.py --infrastructure   # Infrastructure only
+  python deploy.py --billing          # Billing system only
+        """
+    )
     
-    parser = argparse.ArgumentParser(description='Deploy Creator Platform')
-    parser.add_argument('--infrastructure', action='store_true', 
-                       help='Deploy nur Infrastructure (Terraform)')
-    parser.add_argument('--frontend', action='store_true',
-                       help='Deploy nur Frontend (Build & S3 Upload)')
-    parser.add_argument('--all', action='store_true',
-                       help='Komplettes Deployment (Standard)')
+    parser.add_argument(
+        '--frontend',
+        action='store_true',
+        help='Deploy only the React frontend (skip infrastructure and billing)'
+    )
+    parser.add_argument(
+        '--infrastructure',
+        action='store_true',
+        help='Deploy only the infrastructure (Terraform)'
+    )
+    parser.add_argument(
+        '--billing',
+        action='store_true',
+        help='Deploy only the billing system'
+    )
+    parser.add_argument(
+        '--crosspost',
+        action='store_true',
+        help='Deploy only the crosspost lambdas (Instagram, TikTok, WhatsApp, etc.)'
+    )
     
     args = parser.parse_args()
     
-    # Wenn keine Option angegeben, dann --all
-    if not (args.infrastructure or args.frontend or args.all):
-        args.all = True
+    # If --frontend flag is set, only deploy frontend
+    if args.frontend:
+        print("🚀 VIRALTENANT FRONTEND DEPLOYMENT")
+        print("=" * 60)
+        print("⚛️ Deploying React frontend only...")
+        print("=" * 60)
+        
+        try:
+            # Get Terraform outputs to find S3 bucket and CloudFront ID
+            print("\n📋 Reading Terraform outputs...")
+            infra_dir = Path("viraltenant-infrastructure")
+            result = subprocess.run(
+                "terraform output -json",
+                shell=True,
+                cwd=infra_dir,
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode != 0:
+                print("❌ Failed to read Terraform outputs!")
+                print("Make sure infrastructure is deployed first")
+                sys.exit(1)
+            
+            outputs = json.loads(result.stdout)
+            s3_bucket = outputs.get("s3_bucket_name", {}).get("value")
+            cloudfront_id = outputs.get("cloudfront_distribution_id", {}).get("value")
+            website_url = outputs.get("website_url", {}).get("value")
+            
+            if not s3_bucket or not cloudfront_id:
+                print("❌ Could not find S3 bucket or CloudFront ID in Terraform outputs!")
+                sys.exit(1)
+            
+            print(f"✅ Found S3 bucket: {s3_bucket}")
+            print(f"✅ Found CloudFront ID: {cloudfront_id}")
+            
+            # Deploy static pages (tenant-creation, etc.)
+            deploy_static_pages(s3_bucket)
+            
+            # Build and deploy frontend
+            build_and_deploy_frontend(s3_bucket)
+            
+            # Invalidate CloudFront
+            invalidate_cloudfront(cloudfront_id)
+            
+            # Final summary
+            print("\n" + "=" * 60)
+            print("🎉 FRONTEND DEPLOYMENT COMPLETED!")
+            print("=" * 60)
+            print(f"🌐 Website URL: {website_url}")
+            print(f"📦 S3 Bucket: {s3_bucket}")
+            print(f"🔄 CloudFront Distribution: {cloudfront_id}")
+            print("\n✅ Frontend is now live!")
+            print("⏰ Cache invalidation may take 5-15 minutes to complete globally")
+            
+        except Exception as e:
+            print(f"\n❌ FRONTEND DEPLOYMENT FAILED!")
+            print(f"Error: {e}")
+            sys.exit(1)
+        
+        return
+    
+    # If --infrastructure flag is set, only deploy infrastructure
+    if args.infrastructure:
+        print("🚀 VIRALTENANT INFRASTRUCTURE DEPLOYMENT")
+        print("=" * 60)
+        print("🏗️ Deploying infrastructure only...")
+        print("=" * 60)
+        
+        try:
+            # Build Lambda Layer FIRST
+            build_lambda_layer()
+            
+            # Deploy auth handler
+            deploy_auth_handler()
+            
+            # Deploy tenant management
+            deploy_tenant_management()
+            
+            # Deploy billing system
+            deploy_billing_system()
+            
+            # Deploy billing cron
+            deploy_billing_cron()
+            
+            # Deploy tenant authorizer
+            deploy_tenant_authorizer()
+            
+            # Deploy Stripe Lambdas (EventBridge + Webhook)
+            deploy_stripe_webhook()
+            deploy_stripe_eventbridge_handler()
+            
+            # Deploy infrastructure
+            outputs = deploy_infrastructure()
+            
+            # Update frontend configuration
+            update_frontend_config(outputs)
+            
+            # Final summary
+            print("\n" + "=" * 60)
+            print("🎉 INFRASTRUCTURE DEPLOYMENT COMPLETED!")
+            print("=" * 60)
+            
+            api_url = outputs.get("api_gateway_url", {}).get("value")
+            print(f"⚡ API Gateway URL: {api_url}")
+            print("\n✅ Infrastructure is now deployed!")
+            print("💳 Stripe EventBridge Integration: Ready")
+            print("💡 Run 'python deploy.py --frontend' to deploy the frontend")
+            
+        except Exception as e:
+            print(f"\n❌ INFRASTRUCTURE DEPLOYMENT FAILED!")
+            print(f"Error: {e}")
+            sys.exit(1)
+        
+        return
+    
+    # If --crosspost flag is set, only deploy crosspost lambdas
+    if args.crosspost:
+        print("🚀 VIRALTENANT CROSSPOST LAMBDAS DEPLOYMENT")
+        print("=" * 60)
+        print("📤 Deploying crosspost lambdas only...")
+        print("=" * 60)
+        
+        try:
+            # Build Lambda Layer (dependencies)
+            build_lambda_layer()
+            
+            # Deploy crosspost lambdas (creates ZIP files)
+            deploy_crosspost_lambdas()
+            
+            # Deploy WhatsApp lambdas
+            deploy_whatsapp_lambdas()
+            
+            # Apply Terraform for crosspost and whatsapp modules
+            print("\n🏗️ Applying Terraform for crosspost and whatsapp modules...")
+            infra_dir = Path("viraltenant-infrastructure")
+            run_command('terraform apply -target="module.tenant_crosspost" -target="module.tenant_whatsapp" -var-file=terraform.tfvars', cwd=infra_dir)
+            
+            print("\n" + "=" * 60)
+            print("🎉 CROSSPOST LAMBDAS DEPLOYMENT COMPLETED!")
+            print("=" * 60)
+            print("✅ Crosspost Lambdas are now deployed!")
+            print("📤 Supported platforms: Instagram, TikTok, YouTube, Facebook, X/Twitter,")
+            print("   LinkedIn, Telegram, Discord, Slack, Bluesky, Mastodon, Snapchat, WhatsApp")
+            
+        except Exception as e:
+            print(f"\n❌ CROSSPOST DEPLOYMENT FAILED!")
+            print(f"Error: {e}")
+            sys.exit(1)
+        
+        return
+    
+    # If --billing flag is set, only deploy billing
+    if args.billing:
+        print("🚀 VIRALTENANT BILLING DEPLOYMENT")
+        print("=" * 60)
+        print("💰 Deploying billing system only...")
+        print("=" * 60)
+        
+        try:
+            # Build Lambda Layer
+            build_lambda_layer()
+            
+            # Deploy billing system
+            deploy_billing_system()
+            
+            # Deploy billing cron
+            deploy_billing_cron()
+            
+            # Deploy Stripe Lambdas
+            deploy_stripe_webhook()
+            deploy_stripe_eventbridge_handler()
+            
+            # Get Terraform outputs
+            infra_dir = Path("viraltenant-infrastructure")
+            result = subprocess.run(
+                "terraform output -json",
+                shell=True,
+                cwd=infra_dir,
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode == 0:
+                outputs = json.loads(result.stdout)
+                s3_bucket = outputs.get("s3_bucket_name", {}).get("value")
+                
+                if s3_bucket:
+                    deploy_billing_config(s3_bucket)
+                    deploy_billing_dashboard(outputs)
+            
+            print("\n" + "=" * 60)
+            print("🎉 BILLING DEPLOYMENT COMPLETED!")
+            print("=" * 60)
+            print("✅ Billing system is now deployed!")
+            
+        except Exception as e:
+            print(f"\n❌ BILLING DEPLOYMENT FAILED!")
+            print(f"Error: {e}")
+            sys.exit(1)
+        
+        return
+    
+    # Full deployment (default)
+    print("🚀 VIRALTENANT PLATFORM DEPLOYMENT")
+    print("=" * 60)
+    print("🎯 Starting automated deployment process...")
+    print("⏰ This may take several minutes to complete")
+    print("=" * 60)
     
     try:
-        # Immer Konfiguration validieren
-        validate_config()
+        # Build Lambda Layer FIRST (dependencies for all Lambdas)
+        build_lambda_layer()
         
-        if args.all:
-            # Komplettes Deployment
-            check_aws_cli()
-            setup_terraform_backend()
-            verify_ses_email()
-            prepare_lambda_functions()
-            generate_terraform_configs()
-            deploy_terraform()
-            configure_email_notifications()
-            setup_admin_users()
-            generate_frontend_configs()
-            deploy_frontend()
-            show_summary()
-            
-        elif args.infrastructure:
-            # Nur Infrastructure
-            log_step("INFRASTRUCTURE DEPLOYMENT")
-            check_aws_cli()
-            setup_terraform_backend()
-            verify_ses_email()
-            prepare_lambda_functions()
-            generate_terraform_configs()
-            deploy_terraform()
-            configure_email_notifications()
-            setup_admin_users()
-            log_success("Infrastructure deployed!")
-            print()
-            log_info("Nächster Schritt: python deploy.py --frontend")
-            
-        elif args.frontend:
-            # Nur Frontend
-            log_step("FRONTEND DEPLOYMENT")
-            generate_frontend_configs()
-            deploy_frontend()
-            log_success("Frontend deployed!")
-            print()
-            log_info("Website sollte in 2-5 Minuten aktualisiert sein (CloudFront Cache)")
+        # Deploy auth handler (creates ZIP needed by Terraform)
+        deploy_auth_handler()
+        
+        # Deploy tenant management (creates ZIP needed by Terraform)
+        deploy_tenant_management()
+        
+        # Deploy billing system (creates ZIP files needed by Terraform)
+        deploy_billing_system()
+        
+        # Deploy billing cron (monthly invoices) - creates ZIP needed by Terraform
+        deploy_billing_cron()
+        
+        # Deploy tenant authorizer (with billing-admin support)
+        deploy_tenant_authorizer()
+        
+        # Deploy Stripe Lambdas (EventBridge + Webhook)
+        deploy_stripe_webhook()
+        deploy_stripe_eventbridge_handler()
+        
+        # Deploy Crosspost Lambdas (TikTok, YouTube, Instagram, etc.)
+        deploy_crosspost_lambdas()
+        
+        # Deploy WhatsApp Lambdas (AWS End User Messaging Social)
+        deploy_whatsapp_lambdas()
+        
+        # Deploy Membership Lambda (Mollie Split Payments)
+        deploy_membership_lambda()
+        
+        # Deploy infrastructure (uses the ZIP files created above)
+        outputs = deploy_infrastructure()
+        
+        # Update frontend configuration with new API endpoints
+        update_frontend_config(outputs)
+        
+        # Extract deployment info
+        s3_bucket = outputs.get("s3_bucket_name", {}).get("value")
+        cloudfront_id = outputs.get("cloudfront_distribution_id", {}).get("value")
+        website_url = outputs.get("website_url", {}).get("value")
+        cloudfront_url = outputs.get("quick_start_urls", {}).get("value", {}).get("cloudfront_url")
+        api_url = outputs.get("api_gateway_url", {}).get("value")
+        
+        print(f"\n📋 Deployment Configuration:")
+        print(f"  S3 Bucket: {s3_bucket}")
+        print(f"  CloudFront ID: {cloudfront_id}")
+        print(f"  Website URL: {website_url}")
+        print(f"  CloudFront URL: {cloudfront_url}")
+        print(f"  API Gateway URL: {api_url}")
+        
+        if not s3_bucket or not cloudfront_id:
+            print("\n❌ DEPLOYMENT FAILED!")
+            print("Could not get S3 bucket or CloudFront distribution ID from Terraform outputs")
+            print("\n📋 Available Terraform outputs:")
+            for key, value in outputs.items():
+                print(f"  {key}: {value}")
+            sys.exit(1)
+        
+        # Deploy billing configuration and logo to S3
+        deploy_billing_config(s3_bucket)
+        
+        # Deploy billing admin dashboard (to its own bucket)
+        deploy_billing_dashboard(outputs)
+        
+        # Deploy static pages (tenant-creation, etc.)
+        deploy_static_pages(s3_bucket)
+        
+        # Deploy frontend
+        build_and_deploy_frontend(s3_bucket)
+        
+        # Invalidate CloudFront
+        invalidate_cloudfront(cloudfront_id)
+        
+        # Final summary
+        print("\n" + "=" * 60)
+        print("🎉 DEPLOYMENT COMPLETED SUCCESSFULLY!")
+        print("=" * 60)
+        print(f"🌐 Website URL: {website_url}")
+        print(f"🔗 CloudFront URL: {cloudfront_url}")
+        print(f"⚡ API Gateway URL: {api_url}")
+        print(f"📦 S3 Bucket: {s3_bucket}")
+        print(f"🔄 CloudFront Distribution: {cloudfront_id}")
+        
+        # Billing Dashboard URL
+        billing_url = outputs.get("billing_dashboard_url", {}).get("value")
+        if billing_url:
+            print(f"\n📊 Billing Dashboard: {billing_url}")
+        
+        print(f"\n💰 Billing System:")
+        print(f"  ✅ Cost Explorer Integration: Active")
+        print(f"  ✅ Resource Tags: Applied")
+        print(f"  ✅ Billing API Lambda: Deployed")
+        print(f"  ✅ Billing Cron Lambda: Deployed (Monthly Invoices)")
+        print(f"  ✅ Stripe EventBridge Handler: Deployed")
+        print(f"  ✅ Stripe Webhook (Backup): Deployed")
+        print(f"  ✅ React Components: Included")
+        print(f"  📊 Estimate Endpoint: {api_url}/billing/estimate/{{tenantId}}")
+        print(f"  📄 Invoices Endpoint: {api_url}/billing/invoices/{{tenantId}}")
+        print(f"  💳 Stripe Subscription: {api_url}/billing/stripe/subscription")
+        print(f"  📅 Cron Schedule: 1st of every month at 6:00 AM UTC")
+        print("\n✅ Your platform is now live with authentication and billing!")
+        print("💡 If custom domain doesn't work yet, use CloudFront URL")
+        print("⏰ DNS propagation can take up to 48 hours")
+        print("\n📚 Next steps:")
+        print("  1. Fill out billing-config.json with your company data")
+        print("  2. Add your logo as viraltenant-infrastructure/assets/viraltenant-logo.png")
+        print("  3. Run deploy.py again to upload the config")
+        print("  4. Monitor CloudWatch Dashboard: https://console.aws.amazon.com/cloudwatch/")
+        print("  5. Test Billing API: GET /billing/estimate/{tenantId}")
+        print("  6. Review BILLING_DEPLOYMENT.md for detailed documentation")
         
     except KeyboardInterrupt:
-        print()
-        log_warning("Deployment abgebrochen durch Benutzer")
+        print("\n\n⚠️ Deployment interrupted by user")
+        print("🔄 You can resume by running the script again")
         sys.exit(1)
     except Exception as e:
-        print()
-        log_error(f"Fehler beim Deployment: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        print(f"\n\n❌ DEPLOYMENT FAILED!")
+        print(f"Error: {e}")
+        print("\n🔧 Troubleshooting tips:")
+        print("1. Check your AWS credentials and permissions")
+        print("2. Verify Terraform is installed and configured")
+        print("3. Ensure Node.js and npm are installed")
+        print("4. Check the error messages above for specific issues")
+        print("5. Review BILLING_TROUBLESHOOTING.md for billing-specific issues")
         sys.exit(1)
-
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,6 @@
+{
+  "name": "stripe-eventbridge-handler",
+  "version": "1.0.0",
+  "description": "Stripe EventBridge Handler for Tenant Billing (uses common-deps layer)",
+  "main": "index.js"
+}

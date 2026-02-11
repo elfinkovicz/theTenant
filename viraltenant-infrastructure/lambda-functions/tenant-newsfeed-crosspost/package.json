@@ -1,0 +1,11 @@
+{
+  "name": "tenant-newsfeed-crosspost",
+  "version": "1.0.0",
+  "description": "Crossposting settings for Discord, Slack, Facebook, Instagram, Signal, X, LinkedIn",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "axios": "^1.6.0"
+  }
+}

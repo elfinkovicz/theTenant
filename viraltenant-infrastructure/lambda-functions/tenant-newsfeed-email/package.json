@@ -1,0 +1,12 @@
+{
+  "name": "tenant-newsfeed-email",
+  "version": "1.0.0",
+  "description": "Email settings for tenant newsfeed crossposting",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "@aws-sdk/client-ses": "^3.0.0",
+    "@aws-sdk/client-cognito-identity-provider": "^3.0.0"
+  }
+}

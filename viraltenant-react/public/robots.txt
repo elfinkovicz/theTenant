@@ -1,0 +1,6 @@
+# robots.txt for ViralTenant
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://viraltenant.com/sitemap.xml

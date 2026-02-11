@@ -1,9 +1,0 @@
-{
-  "name": "utilities-layer",
-  "version": "1.0.0",
-  "description": "Utility libraries",
-  "dependencies": {
-    "uuid": "^9.0.1",
-    "stripe": "^14.0.0"
-  }
-}

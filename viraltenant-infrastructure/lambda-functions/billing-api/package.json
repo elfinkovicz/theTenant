@@ -1,0 +1,6 @@
+{
+  "name": "billing-api",
+  "version": "1.0.0",
+  "description": "Billing API Lambda with Cost Explorer and Stripe integration (uses common-deps layer)",
+  "main": "index.js"
+}

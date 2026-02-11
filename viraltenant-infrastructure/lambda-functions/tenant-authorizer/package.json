@@ -1,0 +1,12 @@
+{
+  "name": "tenant-authorizer",
+  "version": "1.0.0",
+  "description": "Lambda authorizer for multi-tenant API",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.958.0",
+    "@aws-sdk/lib-dynamodb": "^3.958.0",
+    "jsonwebtoken": "^9.0.3",
+    "jwks-rsa": "^3.2.0"
+  }
+}

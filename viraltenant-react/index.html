@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="de" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <!-- Primary Meta Tags -->
+    <title>ViralTenant - Creator Platform für Live Streaming, Shop & Community</title>
+    <meta name="title" content="ViralTenant - Creator Platform für Live Streaming, Shop & Community" />
+    <meta name="description" content="ViralTenant ist ein Online-Tool von Niels Fink. All-in-One Creator Platform für Live Streaming, Online Shop, Newsfeed, Events und Crossposting." />
+    <meta name="keywords" content="Creator Platform, Live Streaming, Online Shop, Newsfeed, Events, Crossposting, Social Media, Multi-Tenant, Content Creator, Influencer, Community" />
+    <meta name="author" content="Niels Fink" />
+    <meta name="robots" content="index, follow" />
+    <meta name="language" content="German" />
+    <meta name="revisit-after" content="7 days" />
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="msapplication-TileColor" content="#8b5cf6" />
+    <meta name="theme-color" content="#030712" />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://viraltenant.com/" />
+    <meta property="og:title" content="ViralTenant - Creator Platform für Live Streaming, Shop & Community" />
+    <meta property="og:description" content="ViralTenant ist die All-in-One Creator Platform. Erstelle deinen eigenen Tenant mit Live Streaming, Online Shop, Newsfeed, Events und mehr." />
+    <meta property="og:image" content="https://viraltenant.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="de_DE" />
+    <meta property="og:site_name" content="ViralTenant" />
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://viraltenant.com/" />
+    <meta property="twitter:title" content="ViralTenant - Creator Platform für Live Streaming, Shop & Community" />
+    <meta property="twitter:description" content="ViralTenant ist die All-in-One Creator Platform. Erstelle deinen eigenen Tenant mit Live Streaming, Online Shop, Newsfeed, Events und mehr." />
+    <meta property="twitter:image" content="https://viraltenant.com/og-image.png" />
+    
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://viraltenant.com/" />
+    
+    <!-- Preload kritische Ressourcen -->
+    <link rel="preconnect" href="https://ematolm790.execute-api.eu-central-1.amazonaws.com" crossorigin />
+    <link rel="preconnect" href="https://df5r2od45h0ol.cloudfront.net" crossorigin />
+    <link rel="dns-prefetch" href="https://ematolm790.execute-api.eu-central-1.amazonaws.com" />
+    <link rel="dns-prefetch" href="https://df5r2od45h0ol.cloudfront.net" />
+    
+    <!-- Google Fonts - nur preconnect, Fonts werden dynamisch pro Tenant geladen -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    
+    <!-- Kritisches CSS inline für schnellen First Paint -->
+    <style>
+      /* Kritisches CSS für initiales Rendering - NEUTRAL (keine Farben bis Theme geladen) */
+      :root {
+        --color-primary: 100 100 100;
+        --color-background: 3 7 18;
+        --color-background-light: 17 24 39;
+        --color-text: 255 255 255;
+        --color-text-secondary: 156 163 175;
+        --color-border: 55 65 81;
+        --color-card-background: 17 24 39;
+      }
+      
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      
+      html { 
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        line-height: 1.5;
+        -webkit-text-size-adjust: 100%;
+        scroll-behavior: smooth;
+      }
+      
+      body {
+        background-color: rgb(var(--color-background));
+        color: rgb(var(--color-text));
+        min-height: 100vh;
+      }
+      
+      #root {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      
+      /* Loading Spinner */
+      .initial-loader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgb(var(--color-background));
+        z-index: 9999;
+        transition: opacity 0.3s ease-out;
+      }
+      
+      .initial-loader.fade-out {
+        opacity: 0;
+        pointer-events: none;
+      }
+      
+      .spinner {
+        width: 48px;
+        height: 48px;
+        border: 4px solid rgb(var(--color-border));
+        border-top-color: rgb(var(--color-text-secondary));
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+      
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
+    
+    <!-- Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "ViralTenant",
+      "description": "All-in-One Creator Platform für Live Streaming, Online Shop, Newsfeed, Events und Crossposting",
+      "url": "https://viraltenant.com",
+      "applicationCategory": "SocialNetworkingApplication",
+      "operatingSystem": "Web",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "EUR"
+      },
+      "author": {
+        "@type": "Person",
+        "name": "Niels Fink",
+        "email": "email@nielsfink.de",
+        "telephone": "+41 76 361 28 39",
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "Bahnhofstrasse 59",
+          "addressLocality": "Steinhausen",
+          "postalCode": "6312",
+          "addressCountry": "CH"
+        }
+      },
+      "featureList": [
+        "Live Streaming",
+        "Online Shop",
+        "Newsfeed",
+        "Events",
+        "Crossposting",
+        "Multi-Tenant",
+        "Custom Domains"
+      ]
+    }
+    </script>
+
+    <!-- Theme Loading Script (FOUC Prevention) -->
+    <script>
+      (function() {
+        // Store theme data for when body is ready
+        window.__themeData = { applied: false };
+        
+        // Google Fonts mapping - only load what tenant needs
+        var googleFonts = {
+          'Inter': 'Inter:wght@400;500;600;700',
+          'Roboto': 'Roboto:wght@400;500;700',
+          'Open Sans': 'Open+Sans:wght@400;500;600;700',
+          'Montserrat': 'Montserrat:wght@400;500;600;700',
+          'Poppins': 'Poppins:wght@400;500;600;700',
+          'Outfit': 'Outfit:wght@400;500;600;700',
+          'Space Grotesk': 'Space+Grotesk:wght@400;500;600;700',
+          'Playfair Display': 'Playfair+Display:wght@400;500;600;700',
+          'Cormorant Garamond': 'Cormorant+Garamond:wght@400;500;600;700',
+          'Libre Baskerville': 'Libre+Baskerville:wght@400;700',
+          'Nunito': 'Nunito:wght@400;500;600;700',
+          'Quicksand': 'Quicksand:wght@400;500;600;700',
+          'Comfortaa': 'Comfortaa:wght@400;500;600;700',
+          'Source Sans 3': 'Source+Sans+3:wght@400;500;600;700',
+          'Work Sans': 'Work+Sans:wght@400;500;600;700',
+          'Raleway': 'Raleway:wght@400;500;600;700',
+          'Lato': 'Lato:wght@400;700',
+          'Oswald': 'Oswald:wght@400;500;600;700',
+          'Merriweather': 'Merriweather:wght@400;700'
+        };
+        
+        function loadGoogleFont(fontFamily) {
+          if (!fontFamily) return;
+          // Extract font name from CSS font-family string like "'Inter', sans-serif"
+          var match = fontFamily.match(/'([^']+)'/);
+          if (!match) return; // System font, no need to load
+          
+          var fontName = match[1];
+          var fontSpec = googleFonts[fontName];
+          if (!fontSpec) return;
+          
+          var fontId = 'google-font-' + fontName.replace(/\s+/g, '-').toLowerCase();
+          if (document.getElementById(fontId)) return; // Already loaded
+          
+          var link = document.createElement('link');
+          link.id = fontId;
+          link.rel = 'stylesheet';
+          link.href = 'https://fonts.googleapis.com/css2?family=' + fontSpec + '&display=swap';
+          document.head.appendChild(link);
+          console.log('[Theme] Preloading font:', fontName);
+        }
+        
+        function hexToRgb(hex) {
+          if (!hex) return '0 0 0';
+          const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+          return result 
+            ? parseInt(result[1], 16) + ' ' + parseInt(result[2], 16) + ' ' + parseInt(result[3], 16)
+            : '0 0 0';
+        }
+
+        function applyTheme(colors, designSettings) {
+          const root = document.documentElement;
+          
+          if (colors) {
+            root.style.setProperty('--color-primary', hexToRgb(colors.primary));
+            root.style.setProperty('--color-primary-hover', hexToRgb(colors.primaryHover));
+            root.style.setProperty('--color-secondary', hexToRgb(colors.secondary));
+            root.style.setProperty('--color-secondary-hover', hexToRgb(colors.secondaryHover));
+            root.style.setProperty('--color-background', hexToRgb(colors.background));
+            root.style.setProperty('--color-background-light', hexToRgb(colors.backgroundLight));
+            root.style.setProperty('--color-text', hexToRgb(colors.text));
+            root.style.setProperty('--color-text-secondary', hexToRgb(colors.textSecondary));
+            root.style.setProperty('--color-text-muted', hexToRgb(colors.textMuted || colors.textSecondary));
+            root.style.setProperty('--color-border', hexToRgb(colors.border));
+            root.style.setProperty('--color-accent', hexToRgb(colors.accent));
+            root.style.setProperty('--color-success', hexToRgb(colors.success || '#10b981'));
+            root.style.setProperty('--color-warning', hexToRgb(colors.warning || '#f59e0b'));
+            root.style.setProperty('--color-error', hexToRgb(colors.error || '#ef4444'));
+            root.style.setProperty('--color-info', hexToRgb(colors.info || '#3b82f6'));
+            root.style.setProperty('--color-card-background', hexToRgb(colors.cardBackground || colors.backgroundLight));
+            root.style.setProperty('--color-navbar-background', hexToRgb(colors.navbarBackground || colors.background));
+            root.style.setProperty('--color-input-background', hexToRgb(colors.inputBackground || colors.secondary));
+            root.style.setProperty('--color-input-text', hexToRgb(colors.inputText || colors.text));
+            root.style.setProperty('--color-input-placeholder', hexToRgb(colors.inputPlaceholder || '#6b7280'));
+            root.style.setProperty('--color-glow', hexToRgb(colors.glowColor || colors.primary));
+          }
+          
+          if (designSettings) {
+            root.style.setProperty('--button-roundness', (designSettings.buttonRoundness || 8) + 'px');
+            root.style.setProperty('--card-roundness', (designSettings.cardRoundness || 12) + 'px');
+            root.style.setProperty('--card-padding', (designSettings.cardPadding || 24) + 'px');
+            root.style.setProperty('--border-width', (designSettings.borderWidth || 1) + 'px');
+            root.style.setProperty('--font-size-base', (designSettings.fontSize || 16) + 'px');
+            root.style.setProperty('--spacing-multiplier', String(designSettings.spacing || 1));
+            
+            var buttonSizes = { small: '0.5rem 1rem', medium: '0.75rem 1.5rem', large: '1rem 2rem' };
+            root.style.setProperty('--button-padding', buttonSizes[designSettings.buttonSize] || buttonSizes.medium);
+            
+            if (designSettings.fontFamily) {
+              root.style.setProperty('--font-family', designSettings.fontFamily);
+              // Load the tenant's font dynamically
+              loadGoogleFont(designSettings.fontFamily);
+            }
+            
+            if (designSettings.animations) {
+              var speeds = { slow: '0.5s', normal: '0.3s', fast: '0.15s' };
+              root.style.setProperty('--animation-speed', speeds[designSettings.animations.speed] || '0.3s');
+              root.style.setProperty('--hover-scale', designSettings.animations.hoverEnabled ? String(designSettings.animations.hoverScale || 1.05) : '1');
+              root.style.setProperty('--transition-type', designSettings.animations.transitionType || 'ease-in-out');
+            }
+          }
+          
+          // Theme is ready - show content
+          if (document.body) {
+            document.body.classList.remove('theme-loading');
+            document.body.classList.add('theme-ready');
+          }
+          window.__themeData.applied = true;
+        }
+
+        // Get tenant ID from hostname
+        var hostname = window.location.hostname.toLowerCase();
+        var tenantId;
+        var isCustomDomain = false;
+        
+        // Hardcoded custom domain mappings - instant resolution
+        var customDomainMap = {
+          'standupnow.ch': 'standupnow',
+          'www.standupnow.ch': 'standupnow'
+        };
+        
+        if (hostname.includes('viraltenant.com')) {
+          // viraltenant.com subdomain
+          var parts = hostname.split('.');
+          tenantId = (parts.length >= 3 && parts[0] !== 'www') ? parts[0] : 'platform';
+        } else if (customDomainMap[hostname]) {
+          // Custom domain with hardcoded mapping - use subdomain for theme cache
+          isCustomDomain = true;
+          tenantId = customDomainMap[hostname];
+          console.log('[Theme] Custom domain resolved from hardcoded map:', hostname, '-> tenant:', tenantId);
+        } else {
+          // Unknown custom domain - check localStorage for resolved tenant
+          isCustomDomain = true;
+          var cachedTenantId = localStorage.getItem('currentTenantId') || localStorage.getItem('resolvedTenantId');
+          tenantId = cachedTenantId || 'platform';
+          console.log('[Theme] Custom domain detected:', hostname, '-> tenant:', tenantId);
+        }
+        
+        var cacheKey = 'heroContent_' + tenantId;
+
+        // Try to apply cached theme immediately (synchronous)
+        var themeApplied = false;
+        try {
+          var cachedHero = localStorage.getItem(cacheKey);
+          if (cachedHero) {
+            var hero = JSON.parse(cachedHero);
+            if (hero.themeColors) {
+              applyTheme(hero.themeColors, hero.designSettings);
+              themeApplied = true;
+              console.log('[Theme] Applied cached theme for:', tenantId);
+            }
+          }
+        } catch (e) {
+          console.warn('[Theme] Cache read failed:', e);
+        }
+
+        // Fetch fresh theme data
+        var apiUrl = 'https://ematolm790.execute-api.eu-central-1.amazonaws.com/production';
+        
+        // For custom domains, we need to resolve the tenant first if not cached
+        var fetchTheme = function(tid) {
+          fetch(apiUrl + '/tenants/' + tid + '/hero', {
+            headers: { 'Content-Type': 'application/json', 'X-Creator-ID': tid }
+          })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.hero && data.hero.themeColors) {
+              localStorage.setItem('heroContent_' + tid, JSON.stringify(data.hero));
+              applyTheme(data.hero.themeColors, data.hero.designSettings);
+              console.log('[Theme] Applied fresh theme for:', tid);
+            } else if (!themeApplied) {
+              // No theme data and no cache - show content with neutral colors
+              if (document.body) {
+                document.body.classList.remove('theme-loading');
+                document.body.classList.add('theme-ready');
+              }
+              window.__themeData.applied = true;
+            }
+          })
+          .catch(function(e) { 
+            console.warn('[Theme] Fetch failed:', e);
+            // Show content even if fetch fails
+            if (!themeApplied) {
+              if (document.body) {
+                document.body.classList.remove('theme-loading');
+                document.body.classList.add('theme-ready');
+              }
+              window.__themeData.applied = true;
+            }
+          });
+        };
+        
+        // For custom domains without cached tenant, resolve first
+        if (isCustomDomain && tenantId === 'platform') {
+          fetch(apiUrl + '/domain-routing/' + hostname)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (data.tenantId) {
+                console.log('[Theme] Resolved custom domain to tenant:', data.tenantId);
+                localStorage.setItem('currentTenantId', data.tenantId);
+                localStorage.setItem('resolvedTenantId', data.tenantId);
+                localStorage.setItem('resolvedDomain', hostname);
+                fetchTheme(data.tenantId);
+              } else {
+                fetchTheme('platform');
+              }
+            })
+            .catch(function(e) {
+              console.warn('[Theme] Domain resolution failed:', e);
+              fetchTheme('platform');
+            });
+        } else {
+          fetchTheme(tenantId);
+        }
+        
+        // Fallback: Show content after 2 seconds max (in case of slow network)
+        setTimeout(function() {
+          if (document.body && document.body.classList.contains('theme-loading')) {
+            console.warn('[Theme] Timeout - showing content');
+            document.body.classList.remove('theme-loading');
+            document.body.classList.add('theme-ready');
+          }
+        }, 2000);
+      })();
+    </script>
+  </head>
+  <body class="bg-dark-950 text-white">
+    <!-- Static content for crawlers (Google OAuth Verification) - visible without JavaScript -->
+    <noscript>
+      <div style="background:#030712;color:#fff;padding:40px;font-family:system-ui,sans-serif;min-height:100vh;">
+        <header style="max-width:800px;margin:0 auto;">
+          <h1 style="font-size:2rem;margin-bottom:1rem;">ViralTenant</h1>
+          <p style="color:#9ca3af;margin-bottom:2rem;">
+            ViralTenant ist ein Online-Tool, betrieben von <strong style="color:#fff;">Niels Fink</strong>.
+            All-in-One Creator Platform für Live Streaming, Online Shop, Newsfeed, Events und Crossposting.
+          </p>
+        </header>
+        <main style="max-width:800px;margin:0 auto;">
+          <p>Bitte aktivieren Sie JavaScript, um ViralTenant zu nutzen.</p>
+        </main>
+        <footer style="max-width:800px;margin:40px auto 0;padding-top:20px;border-top:1px solid #374151;">
+          <p style="font-weight:600;margin-bottom:0.5rem;">Kontakt / Impressum</p>
+          <address style="font-style:normal;color:#9ca3af;line-height:1.8;">
+            Niels Fink<br>
+            Bahnhofstrasse 59<br>
+            6312 Steinhausen<br>
+            Schweiz (CH)<br>
+            E-Mail: <a href="mailto:email@nielsfink.de" style="color:#8b5cf6;">email@nielsfink.de</a><br>
+            Telefon: <a href="tel:+41763612839" style="color:#8b5cf6;">+41 76 361 28 39</a>
+          </address>
+          <nav style="margin-top:1rem;">
+            <a href="/legal?tab=impressum" style="color:#8b5cf6;margin-right:1rem;">Impressum</a>
+            <a href="/legal?tab=datenschutz" style="color:#8b5cf6;">Datenschutz</a>
+          </nav>
+        </footer>
+      </div>
+    </noscript>
+
+    <!-- Initial Loader (wird von React entfernt) -->
+    <div id="initial-loader" class="initial-loader">
+      <div class="spinner"></div>
+    </div>
+    
+    <div id="root"></div>
+    
+    <!-- Entferne Loader wenn React geladen ist -->
+    <script>
+      window.addEventListener('DOMContentLoaded', function() {
+        // Warte kurz bis React gerendert hat
+        setTimeout(function() {
+          var loader = document.getElementById('initial-loader');
+          if (loader) {
+            loader.classList.add('fade-out');
+            setTimeout(function() { loader.remove(); }, 300);
+          }
+        }, 100);
+      });
+    </script>
+    
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

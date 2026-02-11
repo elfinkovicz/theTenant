@@ -1,0 +1,50 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            "Effect": "Allow",
+            "Resource": "arn:aws:logs:*:*:*"
+        },
+        {
+            "Action": [
+                "cognito-idp:AdminCreateUser",
+                "cognito-idp:AdminDeleteUser",
+                "cognito-idp:AdminGetUser",
+                "cognito-idp:AdminListGroupsForUser",
+                "cognito-idp:AdminAddUserToGroup",
+                "cognito-idp:AdminRemoveUserFromGroup",
+                "cognito-idp:AdminSetUserPassword",
+                "cognito-idp:AdminConfirmSignUp",
+                "cognito-idp:AdminInitiateAuth",
+                "cognito-idp:AdminRespondToAuthChallenge",
+                "cognito-idp:ConfirmSignUp",
+                "cognito-idp:InitiateAuth",
+                "cognito-idp:ResendConfirmationCode",
+                "cognito-idp:ForgotPassword",
+                "cognito-idp:ConfirmForgotPassword",
+                "cognito-idp:GetUser",
+                "cognito-idp:SignUp"
+            ],
+            "Effect": "Allow",
+            "Resource": "arn:aws:cognito-idp:eu-central-1:081033004511:userpool/eu-central-1_4mUqVJrm2"
+        },
+        {
+            "Action": [
+                "dynamodb:Query",
+                "dynamodb:GetItem",
+                "dynamodb:PutItem"
+            ],
+            "Effect": "Allow",
+            "Resource": [
+                "arn:aws:dynamodb:eu-central-1:081033004511:table/viraltenant-tenants-production",
+                "arn:aws:dynamodb:eu-central-1:081033004511:table/viraltenant-tenants-production/index/*",
+                "arn:aws:dynamodb:eu-central-1:081033004511:table/viraltenant-user-tenants-production"
+            ]
+        }
+    ]
+}

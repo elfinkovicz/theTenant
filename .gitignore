@@ -1,46 +1,143 @@
-# Environment variables
+# ViralTenant Multi-Tenant Platform - Git Ignore
+
+# ============================================
+# 🔐 SECRETS & ENVIRONMENT
+# ============================================
 .env
 .env.local
 .env.*.local
+*.key
+*.pem
+*.p12
+*.pfx
+terraform.tfvars
+*.tfvars
+!*.tfvars.example
 
-# Python
+# ============================================
+# 🏗️ TERRAFORM STATE & PLANS
+# ============================================
+
+# Terraform directories and files (global)
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+tfplan
+destroy.tfplan
+terraform-state-backup.json
+plan_output.txt
+response.json
+
+# Infrastructure State Files (legacy paths)
+viraltenant-infrastructure/**/*.tfstate
+viraltenant-infrastructure/**/*.tfstate.*
+viraltenant-infrastructure/**/*.tfstate.backup
+viraltenant-infrastructure/.terraform/
+viraltenant-infrastructure/.terraform.lock.hcl
+viraltenant-infrastructure/tfplan
+viraltenant-infrastructure/destroy.tfplan
+viraltenant-infrastructure/terraform-state-backup.json
+
+# ============================================
+# 🔧 LAMBDA BUILD ARTIFACTS
+# ============================================
+
+# Lambda ZIP Files (global)
+*.zip
+!assets/*.zip
+
+# Lambda node_modules (in lambda-functions)
+**/lambda-functions/**/node_modules/
+**/lambda-layers/**/node_modules/
+**/__pycache__/
+*.pyc
+
+# ============================================
+# 🎨 FRONTEND BUILD FILES
+# ============================================
+
+# React Build Files
+viraltenant-react/dist/
+viraltenant-react/build/
+viraltenant-react/node_modules/
+viraltenant-react/.env.local
+viraltenant-react/.env.development.local
+viraltenant-react/.env.test.local
+viraltenant-react/.env.production.local
+
+# ============================================
+# 📱 MOBILE APP FILES
+# ============================================
+whitelabel-mobile/
+*.apk
+*.ipa
+*.aab
+
+# ============================================
+# 🗂️ BACKUP & TEMPORARY FILES
+# ============================================
+backup-*/
+*.backup
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# ============================================
+# 🐍 PYTHON
+# ============================================
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-*.egg-info/
-dist/
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Terraform
-*.tfstate
-*.tfstate.*
-*.tfstate.backup
-.terraform/
-.terraform.lock.hcl
-tfplan
-
-# Secrets and keys
-*.pem
-*.key
-*.secret
-stream-key.txt
-
-# Logs
-*.log
-
-# Backup files
-*.backup
-*.bak
-
-# IDE
-.vscode/
+# ============================================
+# 📝 IDE & EDITOR FILES
+# ============================================
+.vscode/settings.json
+.vscode/launch.json
+.vscode/extensions.json
 .idea/
 *.swp
 *.swo
 *~
 
-# OS
-.DS_Store
-Thumbs.db
+# ============================================
+# 📊 LOGS & MONITORING
+# ============================================
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ============================================
+# 🔧 DEVELOPMENT TOOLS
+# ============================================
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/

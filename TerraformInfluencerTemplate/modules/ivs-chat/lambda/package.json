@@ -1,7 +1,0 @@
-{
-  "name": "ivs-chat-token-lambda",
-  "version": "1.0.0",
-  "dependencies": {
-    "@aws-sdk/client-ivschat": "^3.0.0"
-  }
-}

@@ -1,0 +1,54 @@
+{
+  "company": {
+    "name": "Viral Tenant GmbH",
+    "legal_form": "GmbH",
+    "address": {
+      "street": "Bahnhofstrasse 59",
+      "zip": "6312",
+      "city": "Steinhausen",
+      "country": "Schweiz"
+    },
+    "contact": {
+      "phone": "+41 76 361 28 39",
+      "email": "billing@viraltenant.com",
+      "website": "https://viraltenant.com"
+    },
+    "managing_director": "Niels Fink"
+  },
+  
+  "banking": {
+    "bank_name": "Zuger Kantonalbank",
+    "iban": "CH2000787786265727503",
+    "bic": "KBZGCH22XXX",
+    "account_holder": "Niels Fink"
+  },
+  
+  "tax": {
+    "vat_rate": 7.7,
+    "_vat_comment": "Schweizer MwSt-Satz 7.7%"
+  },
+  
+  "pricing": {
+    "base_fee": 30.00,
+    "_base_fee_comment": "Monatliche Grundgebühr in EUR"
+  },
+  
+  "invoice": {
+    "prefix": "VT",
+    "footer_text": "Zahlbar innerhalb von 14 Tagen ohne Abzug. Bei Fragen wenden Sie sich bitte an billing@viraltenant.com",
+    "thank_you_text": "Vielen Dank für Ihr Vertrauen!",
+    "payment_terms_days": 14
+  },
+  
+  "logo": {
+    "s3_key": "assets/viraltenant-logo.png",
+    "width": 140,
+    "height": 60,
+    "_comment": "Logo wird aus S3 geladen. Bitte PNG mit transparentem Hintergrund"
+  },
+  
+  "email": {
+    "sender_name": "ViralTenant Billing",
+    "reply_to": "billing@viraltenant.com"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "domain-routing-edge",
+  "version": "1.0.0",
+  "description": "Lambda@Edge function for custom domain routing",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/util-dynamodb": "^3.0.0"
+  }
+}

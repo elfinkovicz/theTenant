@@ -1,0 +1,15 @@
+{
+  "name": "billing-cron",
+  "version": "1.0.0",
+  "description": "Monthly billing cron job - creates invoices with PDF and sends emails",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.400.0",
+    "@aws-sdk/lib-dynamodb": "^3.400.0",
+    "@aws-sdk/client-ses": "^3.400.0",
+    "@aws-sdk/client-s3": "^3.400.0",
+    "@aws-sdk/client-cost-explorer": "^3.400.0",
+    "@aws-sdk/client-cognito-identity-provider": "^3.400.0",
+    "pdfkit": "^0.14.0"
+  }
+}

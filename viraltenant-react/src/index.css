@@ -1,0 +1,300 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Theme colors - neutral defaults (will be overridden by theme) */
+    --color-primary: 100 100 100;
+    --color-primary-hover: 120 120 120;
+    --color-secondary: 31 41 55;
+    --color-secondary-hover: 55 65 81;
+    --color-guest: 31 41 55;
+    --color-guest-hover: 55 65 81;
+    --color-background: 3 7 18;
+    --color-background-light: 17 24 39;
+    --color-text: 255 255 255;
+    --color-text-secondary: 156 163 175;
+    --color-text-muted: 107 114 128;
+    --color-border: 55 65 81;
+    --color-accent: 100 100 100;
+    
+    /* Status colors */
+    --color-success: 16 185 129;
+    --color-warning: 245 158 11;
+    --color-error: 239 68 68;
+    --color-info: 59 130 246;
+    
+    /* Component colors */
+    --color-card-background: 17 24 39;
+    --color-navbar-background: 3 7 18;
+    --color-navbar-active: 100 100 100;
+    --color-input-background: 31 41 55;
+    --color-input-text: 255 255 255;
+    --color-input-placeholder: 107 114 128;
+    --color-glow: 100 100 100;
+    
+    /* Design settings */
+    --button-roundness: 8px;
+    --card-roundness: 12px;
+    --card-padding: 24px;
+    --border-width: 1px;
+    --font-size-base: 16px;
+    --font-family: system-ui, -apple-system, sans-serif;
+    --spacing-multiplier: 1;
+    --button-padding: 0.75rem 1.5rem;
+    
+    /* Animation settings */
+    --animation-speed: 0.3s;
+    --hover-scale: 1.05;
+    --transition-type: ease-in-out;
+  }
+
+  * {
+    border-color: rgb(var(--color-border));
+  }
+  
+  body {
+    background-color: rgb(var(--color-background));
+    color: rgb(var(--color-text));
+    font-family: var(--font-family);
+    @apply antialiased;
+    font-size: var(--font-size-base);
+  }
+  
+  /* Ensure all headings inherit theme text color */
+  h1, h2, h3, h4, h5, h6 {
+    color: rgb(var(--color-text));
+  }
+  
+  /* Ensure labels inherit theme text color */
+  label {
+    color: rgb(var(--color-text));
+  }
+  
+  /* Ensure paragraphs in cards/modals use theme colors */
+  p {
+    color: inherit;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    background-color: rgb(var(--color-primary));
+    color: rgb(var(--color-text));
+    @apply font-semibold border-0;
+    padding: var(--button-padding);
+    border-radius: var(--button-roundness);
+    transition: all var(--animation-speed) var(--transition-type);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+  
+  .btn-primary:hover {
+    background-color: rgb(var(--color-primary-hover));
+    transform: scale(var(--hover-scale));
+    box-shadow: 0 10px 15px -3px rgba(var(--color-glow), 0.5);
+  }
+  
+  .btn-secondary {
+    background-color: rgb(var(--color-secondary));
+    color: rgb(var(--color-text));
+    @apply font-semibold;
+    padding: var(--button-padding);
+    border-radius: var(--button-roundness);
+    border: var(--border-width) solid rgb(var(--color-border));
+    transition: all var(--animation-speed) var(--transition-type);
+  }
+  
+  .btn-secondary:hover {
+    background-color: rgb(var(--color-secondary-hover));
+    transform: scale(var(--hover-scale));
+  }
+  
+  .btn-guest {
+    background-color: rgb(var(--color-guest));
+    color: rgb(var(--color-background));
+    @apply font-semibold;
+    padding: var(--button-padding);
+    border-radius: var(--button-roundness);
+    border: var(--border-width) solid rgb(var(--color-border));
+    transition: all var(--animation-speed) var(--transition-type);
+  }
+  
+  .btn-guest:hover {
+    background-color: rgb(var(--color-guest-hover));
+    transform: scale(var(--hover-scale));
+  }
+  
+  .card {
+    background-color: rgb(var(--color-card-background));
+    border: var(--border-width) solid rgb(var(--color-border));
+    border-radius: var(--card-roundness);
+    padding: var(--card-padding);
+    transition: border-color var(--animation-speed) var(--transition-type);
+    color: rgb(var(--color-text));
+  }
+  
+  .card:hover {
+    border-color: rgb(var(--color-primary));
+  }
+  
+  .input {
+    background-color: rgb(var(--color-input-background));
+    border: var(--border-width) solid rgb(var(--color-border));
+    color: rgb(var(--color-input-text));
+    @apply px-4 py-3 focus:outline-none focus:ring-2 focus:border-transparent;
+    border-radius: var(--button-roundness);
+    transition: all var(--animation-speed) var(--transition-type);
+  }
+  
+  .input::placeholder {
+    color: rgb(var(--color-input-placeholder));
+  }
+  
+  .input:focus {
+    --tw-ring-color: rgb(var(--color-primary));
+  }
+  
+  .glow-text {
+    background: linear-gradient(to right, rgb(var(--color-primary)), rgb(var(--color-accent)));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  /* Theme-aware text colors */
+  .text-theme { color: rgb(var(--color-text)); }
+  .text-theme-secondary { color: rgb(var(--color-text-secondary)); }
+  .text-theme-muted { color: rgb(var(--color-text-muted)); }
+  .text-muted { color: rgb(var(--color-text-muted)); }
+  
+  /* Override dark colors to use theme variables */
+  .text-dark-300 { color: rgb(var(--color-text-secondary)); }
+  .text-dark-400 { color: rgb(var(--color-text-secondary)); }
+  .text-dark-500 { color: rgb(var(--color-text-muted)); }
+  .text-dark-600 { color: rgb(var(--color-text-muted)); }
+  
+  /* Override white text to use theme text color - makes headings readable on light themes */
+  .text-white { color: rgb(var(--color-text)); }
+  
+  /* Theme-aware backgrounds */
+  .bg-theme { background-color: rgb(var(--color-background)); }
+  .bg-theme-light { background-color: rgb(var(--color-background-light)); }
+  .bg-theme-card { background-color: rgb(var(--color-card-background)); }
+  
+  /* Override dark backgrounds to use theme variables */
+  .bg-dark-700 { background-color: rgb(var(--color-card-background)); }
+  .bg-dark-800 { background-color: rgb(var(--color-background-light)); }
+  .bg-dark-900 { background-color: rgb(var(--color-background)); }
+  .bg-dark-950 { background-color: rgb(var(--color-background)); }
+  
+  /* Override dark borders to use theme variables */
+  .border-dark-600 { border-color: rgb(var(--color-border)); }
+  .border-dark-700 { border-color: rgb(var(--color-border)); }
+  .border-dark-800 { border-color: rgb(var(--color-border)); }
+  
+  /* Hover states - keep white for buttons but use theme for text hovers */
+  .hover\:text-white:hover { color: rgb(var(--color-text)); }
+  .hover\:bg-dark-700:hover { background-color: rgb(var(--color-card-background)); }
+  .hover\:bg-dark-800:hover { background-color: rgb(var(--color-background-light)); }
+  
+  /* Override gray colors to use theme variables */
+  .text-gray-400 { color: rgb(var(--color-text-secondary)); }
+  .text-gray-500 { color: rgb(var(--color-text-muted)); }
+  .text-gray-600 { color: rgb(var(--color-text-muted)); }
+  .bg-gray-800 { background-color: rgb(var(--color-background-light)); }
+  .bg-gray-900 { background-color: rgb(var(--color-background)); }
+  
+  /* Status colors */
+  .text-success { color: rgb(var(--color-success)); }
+  .text-warning { color: rgb(var(--color-warning)); }
+  .text-error { color: rgb(var(--color-error)); }
+  .text-info { color: rgb(var(--color-info)); }
+  
+  .bg-success { background-color: rgb(var(--color-success)); }
+  .bg-warning { background-color: rgb(var(--color-warning)); }
+  .bg-error { background-color: rgb(var(--color-error)); }
+  .bg-info { background-color: rgb(var(--color-info)); }
+  
+  /* Navbar */
+  .navbar {
+    background-color: rgb(var(--color-navbar-background));
+  }
+  
+  .text-navbar-active {
+    color: rgb(var(--color-navbar-active));
+  }
+  
+  .bg-navbar-active {
+    background-color: rgb(var(--color-navbar-active));
+  }
+  
+  /* Disable animations when requested */
+  .no-scroll-animations * {
+    animation: none !important;
+  }
+  
+  .no-page-transitions * {
+    transition: none !important;
+  }
+}
+
+@layer utilities {
+  .text-shadow {
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  }
+  
+  .glass {
+    background-color: rgba(var(--color-card-background), 0.5);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(var(--color-border), 0.5);
+  }
+  
+  /* Fade-in animation for special cases only */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out forwards;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  /* Range Slider Styles */
+  input[type="range"].slider {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  
+  input[type="range"].slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: rgb(var(--color-primary));
+    cursor: pointer;
+    border-radius: 50%;
+    border: 2px solid rgb(var(--color-secondary));
+  }
+  
+  input[type="range"].slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: rgb(var(--color-primary));
+    cursor: pointer;
+    border-radius: 50%;
+    border: 2px solid rgb(var(--color-secondary));
+  }
+  
+  input[type="range"].slider::-webkit-slider-thumb:hover {
+    background: rgb(var(--color-primary-hover));
+  }
+  
+  input[type="range"].slider::-moz-range-thumb:hover {
+    background: rgb(var(--color-primary-hover));
+  }
+}

@@ -1,0 +1,125 @@
+# Multi-Tenant ViralTenant Platform Configuration
+# Copy this file to terraform.tfvars and fill in your values
+
+project_name = "viraltenant"
+environment  = "production"
+aws_region   = "eu-central-1"
+
+# Platform Domain Configuration
+platform_domain = "viraltenant.com"
+api_domain      = "api.viraltenant.com"
+
+# Route 53 DNS Configuration
+enable_route53_dns      = true
+create_hosted_zone      = true
+existing_hosted_zone_id = ""
+
+# SSL Certificate Configuration
+enable_ssl_certificate = true
+ssl_validation_method  = "DNS"
+
+# Domain Routing Configuration
+enable_wildcard_subdomain = true
+enable_www_redirect       = true
+enable_api_subdomain      = true
+
+# Database Configuration
+enable_point_in_time_recovery = true
+enable_deletion_protection    = false
+
+# Storage Configuration
+enable_versioning = true
+enable_encryption = true
+
+# Auth Configuration
+enable_mfa = false
+password_policy = {
+  minimum_length    = 8
+  require_lowercase = true
+  require_numbers   = true
+  require_symbols   = false
+  require_uppercase = true
+}
+
+# API Configuration
+api_throttle_rate  = 1000
+api_throttle_burst = 2000
+
+# Monitoring
+enable_cloudwatch_logs = true
+log_retention_days     = 30
+
+tags = {
+  Platform    = "ViralTenant"
+  Environment = "production"
+  ManagedBy   = "Terraform"
+  Type        = "Multi-Tenant"
+}
+
+# ============================================================
+# OAuth Credentials (get from respective developer portals)
+# ============================================================
+
+# YouTube OAuth
+youtube_client_id     = "your-youtube-client-id"
+youtube_client_secret = "your-youtube-client-secret"
+oauth_encryption_key  = "change-this-in-production-32chars"
+
+# Meta (Facebook/Instagram/Threads)
+meta_app_id     = "your-meta-app-id"
+meta_app_secret = "your-meta-app-secret"
+
+# Instagram
+instagram_app_id     = "your-instagram-app-id"
+instagram_app_secret = "your-instagram-app-secret"
+
+# Threads
+threads_app_id     = "your-threads-app-id"
+threads_app_secret = "your-threads-app-secret"
+
+# Google
+google_client_id     = "your-google-client-id"
+google_client_secret = "your-google-client-secret"
+
+# LinkedIn
+linkedin_client_id     = "your-linkedin-client-id"
+linkedin_client_secret = "your-linkedin-client-secret"
+
+# X (Twitter)
+twitter_client_id     = "your-twitter-client-id"
+twitter_client_secret = "your-twitter-client-secret"
+
+# TikTok
+tiktok_client_key    = "your-tiktok-client-key"
+tiktok_client_secret = "your-tiktok-client-secret"
+
+# Snapchat
+snapchat_client_id     = "your-snapchat-client-id"
+snapchat_client_secret = "your-snapchat-client-secret"
+
+# ============================================================
+# STRIPE BILLING CONFIGURATION
+# ============================================================
+
+stripe_secret_key      = "sk_live_..."
+stripe_publishable_key = "pk_live_..."
+stripe_webhook_secret  = "whsec_..."
+stripe_price_id        = "price_..."
+
+# ============================================================
+# MOLLIE BILLING CONFIGURATION
+# ============================================================
+
+mollie_api_key       = "live_..."
+mollie_client_id     = "app_..."
+mollie_client_secret = "..."
+mollie_profile_id    = "pfl_..."
+
+# ============================================================
+# WHATSAPP CONFIGURATION
+# ============================================================
+
+whatsapp_waba_id         = "waba-..."
+whatsapp_phone_number_id = "phone-number-id-..."
+whatsapp_phone_number    = "+41..."
+whatsapp_display_name    = "YourBrand"

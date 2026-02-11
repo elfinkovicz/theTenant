@@ -1,0 +1,121 @@
+VIRALTENANT INFRASTRUCTURE - MODULE ÜBERSICHT
+==============================================
+
+CORE MODULES:
+-------------
+central-auth          → Cognito User Pool + API Gateway REST API für Authentifizierung
+lambda-authorizer     → Custom Authorizer für API Gateway, prüft JWT-Token und Tenant-Zugehörigkeit
+lambda-layers         → Shared Node.js Dependencies für alle Lambda-Funktionen
+
+TENANT MANAGEMENT:
+------------------
+tenant-management     → DynamoDB-Tabellen für Tenants, User-Tenants und Assets
+tenant-registration   → E-Mail-Verifizierung und Tenant-Erstellung bei Registrierung
+tenant-api            → CRUD-Operationen für Tenants (GET, POST, Subdomain-Check)
+
+PAGE TAB MODULES (Frontend-Seiten):
+-----------------------------------
+tenant-frontend       → /Home: Hero-Content, Themes, Design-Settings und Werbebanner
+tenant-live           → /Live: Live-Streaming Einstellungen, Thumbnails, Overlays
+tenant-videos         → /Videos: Video-Content, Thumbnails, Kategorien
+tenant-shop           → /Shop: Produkte, Produktbilder, Kategorien
+tenant-events         → /Events: Events, Event-Bilder, Banner
+tenant-newsfeed       → /Newsfeed: Posts, Post-Bilder, Medien
+tenant-channels       → /Channels: Kanäle, Icons, Banner
+tenant-team           → /Team: Team-Mitglieder, Avatare
+tenant-contact        → /Contact: Kontaktinfos, Hintergrundbilder
+
+BILLING:
+--------
+billing-api           → Stripe-Integration für Zahlungen und Rechnungen
+
+STORAGE & CDN:
+--------------
+s3-tenant-storage     → S3-Buckets für Creator-Assets und temporäre Uploads
+s3-bucket-policies    → CloudFront-Zugriffsrichtlinien für S3-Buckets
+cloudfront            → CDN-Distribution mit Custom Domains und SSL
+
+DNS & ROUTING:
+--------------
+route53               → DNS-Zone und SSL-Zertifikat für viraltenant.com + Wildcard
+
+==============================================
+S3 ASSET STRUKTUR PRO TENANT:
+==============================================
+s3://viraltenant-creator-assets-production/
+└── tenants/
+    └── {tenant_id}/
+        ├── hero/           → Logos, Hintergrundbilder (tenant-frontend)
+        ├── ads/            → Werbebanner (tenant-frontend)
+        ├── live/           → Stream-Thumbnails, Overlays (tenant-live)
+        ├── videos/         → Video-Dateien, Thumbnails (tenant-videos)
+        ├── shop/           → Produktbilder (tenant-shop)
+        ├── events/         → Event-Bilder, Banner (tenant-events)
+        ├── newsfeed/       → Post-Bilder, Medien (tenant-newsfeed)
+        ├── channels/       → Kanal-Icons, Banner (tenant-channels)
+        ├── team/           → Team-Avatare (tenant-team)
+        └── contact/        → Hintergrundbilder (tenant-contact)
+
+==============================================
+API ENDPOINTS PRO TAB:
+==============================================
+GET  /tenants/{id}/hero              → Öffentlich (tenant-frontend)
+PUT  /tenants/{id}/hero              → Admin only
+POST /tenants/{id}/hero/upload-url   → Admin only (presigned S3 URL)
+
+GET  /tenants/{id}/advertisement     → Öffentlich (tenant-frontend)
+PUT  /tenants/{id}/advertisement     → Admin only
+POST /tenants/{id}/advertisement/upload-url → Admin only
+
+GET  /tenants/{id}/live              → Öffentlich
+PUT  /tenants/{id}/live              → Admin only
+POST /tenants/{id}/live/upload-url   → Admin only
+DELETE /tenants/{id}/live/asset      → Admin only
+
+GET  /tenants/{id}/videos            → Öffentlich
+PUT  /tenants/{id}/videos            → Admin only
+POST /tenants/{id}/videos/upload-url → Admin only
+DELETE /tenants/{id}/videos/asset    → Admin only
+
+GET  /tenants/{id}/shop              → Öffentlich
+PUT  /tenants/{id}/shop              → Admin only
+POST /tenants/{id}/shop/upload-url   → Admin only
+DELETE /tenants/{id}/shop/asset      → Admin only
+
+GET  /tenants/{id}/events            → Öffentlich
+PUT  /tenants/{id}/events            → Admin only
+POST /tenants/{id}/events/upload-url → Admin only
+DELETE /tenants/{id}/events/asset    → Admin only
+
+GET  /tenants/{id}/newsfeed          → Öffentlich
+PUT  /tenants/{id}/newsfeed          → Admin only
+POST /tenants/{id}/newsfeed/upload-url → Admin only
+DELETE /tenants/{id}/newsfeed/asset  → Admin only
+
+GET  /tenants/{id}/channels          → Öffentlich
+PUT  /tenants/{id}/channels          → Admin only
+POST /tenants/{id}/channels/upload-url → Admin only
+DELETE /tenants/{id}/channels/asset  → Admin only
+
+GET  /tenants/{id}/team              → Öffentlich
+PUT  /tenants/{id}/team              → Admin only
+POST /tenants/{id}/team/upload-url   → Admin only
+DELETE /tenants/{id}/team/asset      → Admin only
+
+GET  /tenants/{id}/contact           → Öffentlich
+PUT  /tenants/{id}/contact           → Admin only
+POST /tenants/{id}/contact/upload-url → Admin only
+DELETE /tenants/{id}/contact/asset   → Admin only
+
+==============================================
+DATENFLUSS:
+==============================================
+1. Admin lädt Asset hoch:
+   Frontend → POST /upload-url → Lambda → S3 Presigned URL
+   Frontend → PUT direkt zu S3 mit Presigned URL
+   Frontend → PUT /[tab] mit S3 Key → Lambda → DynamoDB
+
+2. User lädt Seite:
+   Frontend → GET /[tab] → Lambda → DynamoDB
+   Lambda konvertiert S3 Keys zu CloudFront URLs
+   Frontend zeigt Bilder via CloudFront CDN

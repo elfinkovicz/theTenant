@@ -1,0 +1,27 @@
+{
+  "name": "tenant-live-lambda",
+  "version": "1.0.0",
+  "description": "AWS Lambda function for tenant live streaming with IVS integration",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.490.0",
+    "@aws-sdk/lib-dynamodb": "^3.490.0",
+    "@aws-sdk/client-s3": "^3.490.0",
+    "@aws-sdk/s3-request-presigner": "^3.490.0",
+    "@aws-sdk/client-ivs": "^3.490.0",
+    "@aws-sdk/client-ivschat": "^3.490.0",
+    "@aws-sdk/client-medialive": "^3.490.0"
+  },
+  "keywords": [
+    "aws",
+    "lambda",
+    "ivs",
+    "streaming",
+    "multi-tenant"
+  ],
+  "author": "ViralTenant",
+  "license": "MIT"
+}

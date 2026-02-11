@@ -1,9 +1,0 @@
-# Node modules in layers
-*/node_modules/
-*/nodejs/
-
-# Generated ZIP files
-*.zip
-
-# Package lock files (optional - commit if you want reproducible builds)
-# */package-lock.json

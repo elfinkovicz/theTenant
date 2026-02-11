@@ -1,6 +1,0 @@
-node_modules/
-*.zip
-nodejs/
-layers/*/node_modules/
-layers/*/nodejs/
-layers/*-layer.zip

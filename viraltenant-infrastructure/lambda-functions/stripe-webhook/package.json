@@ -1,0 +1,6 @@
+{
+  "name": "stripe-webhook",
+  "version": "1.0.0",
+  "description": "Stripe Webhook Handler for Tenant Billing (uses common-deps layer)",
+  "main": "index.js"
+}

@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ViralTenant Billing Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            900: '#0a0a0f',
+                            800: '#12121a',
+                            700: '#1a1a24',
+                            600: '#24242f',
+                            400: '#6b7280'
+                        },
+                        primary: {
+                            500: '#8b5cf6',
+                            600: '#7c3aed'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background: linear-gradient(135deg, #0a0a0f 0%, #12121a 100%); }
+        .card { background: rgba(26, 26, 36, 0.8); border: 1px solid rgba(139, 92, 246, 0.2); }
+        .card:hover { border-color: rgba(139, 92, 246, 0.4); }
+        .glow-text { background: linear-gradient(135deg, #8b5cf6, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .status-paid { color: #22c55e; }
+        .status-open { color: #eab308; }
+        .status-overdue { color: #ef4444; }
+        .loader { border: 3px solid #1a1a24; border-top: 3px solid #8b5cf6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* Sortable table headers */
+        th.sortable { cursor: pointer; user-select: none; transition: background-color 0.2s; }
+        th.sortable:hover { background-color: rgba(139, 92, 246, 0.2); }
+        th.sortable::after { content: '⇅'; margin-left: 6px; opacity: 0.3; font-size: 12px; }
+        th.sortable.asc::after { content: '↑'; opacity: 1; color: #8b5cf6; }
+        th.sortable.desc::after { content: '↓'; opacity: 1; color: #8b5cf6; }
+    </style>
+</head>
+<body class="min-h-screen text-white">
+    <!-- Login Screen -->
+    <div id="loginScreen" class="min-h-screen flex items-center justify-center p-4">
+        <div class="card rounded-xl p-8 max-w-md w-full">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold mb-2">
+                    <span class="glow-text">ViralTenant</span> Billing
+                </h1>
+                <p class="text-dark-400">Admin Dashboard</p>
+            </div>
+            
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">E-Mail</label>
+                    <input type="email" id="email" required
+                        class="w-full px-4 py-3 bg-dark-800 border border-dark-600 rounded-lg focus:border-primary-500 focus:outline-none"
+                        placeholder="admin@viraltenant.com">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Passwort</label>
+                    <input type="password" id="password" required
+                        class="w-full px-4 py-3 bg-dark-800 border border-dark-600 rounded-lg focus:border-primary-500 focus:outline-none"
+                        placeholder="••••••••">
+                </div>
+                <div id="loginError" class="hidden text-red-500 text-sm p-3 bg-red-500/10 rounded-lg"></div>
+                <button type="submit" id="loginBtn"
+                    class="w-full py-3 bg-primary-500 hover:bg-primary-600 rounded-lg font-semibold transition-colors">
+                    Anmelden
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboard" class="hidden">
+        <!-- Header -->
+        <header class="bg-dark-800 border-b border-dark-600 px-6 py-4">
+            <div class="max-w-7xl mx-auto flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <h1 class="text-xl font-bold">
+                        <span class="glow-text">ViralTenant</span> Billing
+                    </h1>
+                    <span class="text-dark-400 text-sm">Admin Dashboard</span>
+                </div>
+                <div class="flex items-center gap-4">
+                    <span id="userEmail" class="text-dark-400 text-sm"></span>
+                    <button onclick="logout()" class="px-4 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg text-sm transition-colors">
+                        Abmelden
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto p-6">
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
+                <div class="card rounded-xl p-6">
+                    <div class="text-dark-400 text-sm mb-1">Aktive Tenants</div>
+                    <div id="statTenants" class="text-3xl font-bold">-</div>
+                </div>
+                <div class="card rounded-xl p-6">
+                    <div class="text-dark-400 text-sm mb-1">Offene Rechnungen</div>
+                    <div id="statOpenInvoices" class="text-3xl font-bold text-yellow-500">-</div>
+                </div>
+                <div class="card rounded-xl p-6">
+                    <div class="text-dark-400 text-sm mb-1">Umsatz (Monat)</div>
+                    <div id="statRevenue" class="text-3xl font-bold text-green-500">-</div>
+                </div>
+                <div class="card rounded-xl p-6">
+                    <div class="text-dark-400 text-sm mb-1">AWS Kosten (Monat)</div>
+                    <div id="statAwsCosts" class="text-3xl font-bold text-red-400">-</div>
+                </div>
+                <div class="card rounded-xl p-6 border-green-500/30">
+                    <div class="text-dark-400 text-sm mb-1">Gewinn (Monat)</div>
+                    <div id="statProfit" class="text-3xl font-bold text-green-400">-</div>
+                </div>
+            </div>
+
+            <!-- Monthly Performance Chart -->
+            <div class="card rounded-xl p-6 mb-8">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold">Jahresübersicht 2025/2026</h3>
+                    <div class="flex gap-4 text-sm">
+                        <span class="flex items-center gap-2"><span class="w-3 h-3 bg-green-500 rounded"></span> Umsatz</span>
+                        <span class="flex items-center gap-2"><span class="w-3 h-3 bg-red-400 rounded"></span> AWS Kosten</span>
+                        <span class="flex items-center gap-2"><span class="w-3 h-3 bg-primary-500 rounded"></span> Gewinn</span>
+                    </div>
+                </div>
+                <div id="chartContainer" class="h-64 flex items-end gap-2">
+                    <!-- Chart will be rendered here -->
+                </div>
+                <div id="chartLabels" class="flex gap-2 mt-2 text-xs text-dark-400">
+                    <!-- Month labels will be rendered here -->
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex gap-4 mb-6">
+                <button onclick="generateInvoices()" id="generateBtn"
+                    class="px-6 py-3 bg-orange-600 hover:bg-orange-700 rounded-lg font-semibold transition-colors flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    Monatliche Rechnungen generieren
+                </button>
+                <button onclick="refreshData()" class="px-6 py-3 bg-dark-700 hover:bg-dark-600 rounded-lg font-semibold transition-colors flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    Aktualisieren
+                </button>
+            </div>
+
+            <!-- Tabs -->
+            <div class="flex gap-2 mb-6 border-b border-dark-600">
+                <button onclick="showTab('tenants')" id="tabTenants" class="px-6 py-3 font-semibold border-b-2 border-primary-500 text-primary-500">
+                    Tenants
+                </button>
+                <button onclick="showTab('invoices')" id="tabInvoices" class="px-6 py-3 font-semibold border-b-2 border-transparent text-dark-400 hover:text-white">
+                    Alle Rechnungen
+                </button>
+                <button onclick="showTab('consumption')" id="tabConsumption" class="px-6 py-3 font-semibold border-b-2 border-transparent text-dark-400 hover:text-white">
+                    Consumption
+                </button>
+            </div>
+
+            <!-- Loading -->
+            <div id="loading" class="flex justify-center py-12">
+                <div class="loader"></div>
+            </div>
+
+            <!-- Tenants Table -->
+            <div id="tenantsSection" class="hidden">
+                <!-- Tenants Filter -->
+                <div class="card rounded-xl p-4 mb-4">
+                    <div class="flex flex-wrap gap-4 items-center">
+                        <div class="flex-1 min-w-[200px]">
+                            <input type="text" id="tenantSearch" placeholder="Suche nach Name, ID oder Subdomain..."
+                                class="w-full px-4 py-2 bg-dark-800 border border-dark-600 rounded-lg focus:border-primary-500 focus:outline-none text-sm"
+                                oninput="filterTenants()">
+                        </div>
+                        <div>
+                            <select id="tenantStatusFilter" onchange="filterTenants()"
+                                class="px-4 py-2 bg-dark-800 border border-dark-600 rounded-lg focus:border-primary-500 focus:outline-none text-sm">
+                                <option value="">Alle Status</option>
+                                <option value="active">Aktiv</option>
+                                <option value="pending">Ausstehend</option>
+                                <option value="suspended">Gesperrt</option>
+                            </select>
+                        </div>
+                        <div>
+                            <select id="tenantSortFilter" onchange="filterTenants()"
+                                class="px-4 py-2 bg-dark-800 border border-dark-600 rounded-lg focus:border-primary-500 focus:outline-none text-sm">
+                                <option value="name">Name A-Z</option>
+                                <option value="name-desc">Name Z-A</option>
+                                <option value="amount-desc">Höchster Betrag</option>
+                                <option value="amount">Niedrigster Betrag</option>
+                                <option value="open-desc">Offene Rechnungen</option>
+                            </select>
+                        </div>
+                        <button onclick="resetTenantFilters()" class="px-4 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg text-sm transition-colors">
+                            Zurücksetzen
+                        </button>
+                    </div>
+                    <div id="tenantFilterInfo" class="mt-2 text-sm text-dark-400 hidden"></div>
+                </div>
+                <div class="card rounded-xl overflow-hidden">
+                    <table class="w-full" id="tenantsTable">
+                        <thead class="bg-dark-800">
+                            <tr>
+                                <th class="text-left px-6 py-4 text-sm font-semibold text-dark-400 sortable" data-sort="name" onclick="sortTable('tenants', 'name')">Tenant</th>
+                                <th class="text-left px-6 py-4 text-sm font-semibold text-dark-400 sortable" data-sort="subdomain" onclick="sortTable('tenants', 'subdomain')">Subdomain</th>
+                                <th class="text-left px-6 py-4 text-sm font-semibold text-dark-400 sortable" data-sort="status" onclick="sortTable('tenants', 'status')">Status</th>
+                                <th class="text-right px-6 py-4 text-sm font-semibold text-dark-400 sortable" data-sort="currentMonth" onclick="sortTable('tenants', 'currentMonth')">Aktueller Monat</th>
+                                <th class="text-right px-6 py-4 text-sm font-semibold text-dark-400 sortable" data-sort="openInvoices" onclick="sortTable('tenants', 'openInvoices')">Offene Rechnungen</th>
+                                <th class="text-right px-6 py-4 text-sm font-semibold text-dark-400 sortable" data-sort="paidTotal" onclick="sortTable('tenants', 'paidTotal')">Bezahlt (Gesamt)</th>
+                                <th class="text-center px-6 py-4 text-sm font-semibold text-dark-400">Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tenantsTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tenant Info Modal -->
+            <div id="tenantModal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+                <div class="card rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                    <div class="p-6 border-b border-dark-600 flex items-center justify-between">
+                        <h2 class="text-xl font-bold">Tenant Details</h2>
+                        <button onclick="closeTenantModal()" class="text-dark-400 hover:text-white">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div id="tenantModalContent" class="p-6">
+                        <!-- Content will be loaded dynamically -->
+                    </div>
+                    <div class="p-6 border-t border-dark-600 flex gap-3">
+                        <button id="tenantSuspendBtn" onclick="toggleTenantSuspension()" 
+                            class="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg font-semibold transition-colors flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
+                            </svg>
+                            <span id="suspendBtnText">Sperren</span>
+                        </button>
+                        <button onclick="deleteTenant()" 
+                            class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                            Löschen
+                        </button>
+                        <button onclick="closeTenantModal()" class="ml-auto px-4 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg font-semibold transition-colors">
+                            Schließen
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Invoices Table -->
+            <div id="invoicesSection" class="hidden">
+                <!-- Invoices Filter -->
+                <div class="card rounded-xl p-4 mb-4">
+                    <div class="flex flex-wrap gap-4 items-center">
+                        <div class="flex-1 min-w-[200px]">
+                            <input type="text" id="invoiceSearch" placeholder="Suche nach Rechnungsnr. oder Tenant..."
+                                class="w-full px-4 py-2 bg-dark-800 border border-dark-600 rounded-lg focus:border-primary-500 focus:outline-none text-sm"
+                                oninput="filterInvoices()">
+                        </div>
+                        <div>
+                            <select id="invoiceStatusFilter" onchange="filterInvoices()"
+                                class="px-4 py-2 bg-dark-800 border border-dark-600 rounded-lg focus:border-primary-500 focus:outline-none text-sm">
+                                <option value="">Alle Status</option>
+                                <option value="paid">Bezahlt</option>
+                                <option value="open">Offen</option>
+                                <option value="overdue">Überfällig</option>
+                                <option value="draft">Entwurf</option>
+                            </select>
+                        </div>
+                        <div>
+                            <select id="invoiceTenantFilter" onchange="filterInvoices()"
+                                class="px-4 py-2 bg-dark-800 border border-dark-600 rounded-lg focus:border-primary-500 focus:outline-none text-sm">
+                                <option value="">Alle Tenants</option>
+                            </select>
+                        </div>
+                        <div>
+                            <select id="invoicePeriodFilter" onchange="filterInvoices()"
+                                class="px-4 py-2 bg-dark-800 border border-dark-600 rounded-lg focus:border-primary-500 focus:outline-none text-sm">
+                                <option value="">Alle Zeiträume</option>
+                            </select>
+                        </div>
+                        <div>
+                            <select id="invoiceSortFilter" onchange="filterInvoices()"
+                                class="px-4 py-2 bg-dark-800 border border-dark-600 rounded-lg focus:border-primary-500 focus:outline-none text-sm">
+                                <option value="date-desc">Neueste zuerst</option>
+                                <option value="date">Älteste zuerst</option>
+                                <option value="amount-desc">Höchster Betrag</option>
+                                <option value="amount">Niedrigster Betrag</option>
+                            </select>
+                        </div>
+                        <button onclick="resetInvoiceFilters()" class="px-4 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg text-sm transition-colors">
+                            Zurücksetzen
+                        </button>
+                    </div>
+                    <div id="invoiceFilterInfo" class="mt-2 text-sm text-dark-400 hidden"></div>
+                </div>
+                <div class="card rounded-xl overflow-x-auto">
+                    <table class="w-full min-w-[900px]" id="invoicesTable">
+                        <thead class="bg-dark-800">
+                            <tr>
+                                <th class="text-left px-4 py-4 text-sm font-semibold text-dark-400 sortable whitespace-nowrap" data-sort="invoiceNumber" onclick="sortTable('invoices', 'invoiceNumber')">Rechnungsnr.</th>
+                                <th class="text-left px-4 py-4 text-sm font-semibold text-dark-400 sortable whitespace-nowrap" data-sort="tenant" onclick="sortTable('invoices', 'tenant')">Tenant</th>
+                                <th class="text-left px-4 py-4 text-sm font-semibold text-dark-400 sortable whitespace-nowrap" data-sort="period" onclick="sortTable('invoices', 'period')">Zeitraum</th>
+                                <th class="text-left px-4 py-4 text-sm font-semibold text-dark-400 sortable whitespace-nowrap" data-sort="status" onclick="sortTable('invoices', 'status')">Status</th>
+                                <th class="text-right px-4 py-4 text-sm font-semibold text-dark-400 sortable whitespace-nowrap" data-sort="amount" onclick="sortTable('invoices', 'amount')">Betrag</th>
+                                <th class="text-right px-4 py-4 text-sm font-semibold text-dark-400 sortable whitespace-nowrap" data-sort="createdAt" onclick="sortTable('invoices', 'createdAt')">Erstellt</th>
+                                <th class="text-center px-4 py-4 text-sm font-semibold text-dark-400 whitespace-nowrap">PDF</th>
+                            </tr>
+                        </thead>
+                        <tbody id="invoicesTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Consumption Table -->
+            <div id="consumptionSection" class="hidden">
+                <!-- Consumption Filter -->
+                <div class="card rounded-xl p-4 mb-4">
+                    <div class="flex flex-wrap gap-4 items-center">
+                        <div class="flex-1 min-w-[200px]">
+                            <input type="text" id="consumptionSearch" placeholder="Suche nach Tenant..."
+                                class="w-full px-4 py-2 bg-dark-800 border border-dark-600 rounded-lg focus:border-primary-500 focus:outline-none text-sm"
+                                oninput="filterConsumption()">
+                        </div>
+                        <div>
+                            <select id="consumptionSortFilter" onchange="filterConsumption()"
+                                class="px-4 py-2 bg-dark-800 border border-dark-600 rounded-lg focus:border-primary-500 focus:outline-none text-sm">
+                                <option value="total-desc">Höchste Kosten</option>
+                                <option value="total">Niedrigste Kosten</option>
+                                <option value="name">Name A-Z</option>
+                                <option value="multistream-desc">Multistreaming</option>
+                                <option value="videohost-desc">Videohosting</option>
+                            </select>
+                        </div>
+                        <button onclick="resetConsumptionFilters()" class="px-4 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg text-sm transition-colors">
+                            Zurücksetzen
+                        </button>
+                    </div>
+                    <div id="consumptionFilterInfo" class="mt-2 text-sm text-dark-400 hidden"></div>
+                </div>
+                <div class="card rounded-xl overflow-hidden">
+                    <table class="w-full" id="consumptionTable">
+                        <thead class="bg-dark-800">
+                            <tr>
+                                <th class="text-left px-6 py-4 text-sm font-semibold text-dark-400 sortable" data-sort="name" onclick="sortTable('consumption', 'name')">Tenant</th>
+                                <th class="text-right px-6 py-4 text-sm font-semibold text-dark-400 sortable" data-sort="baseFee" onclick="sortTable('consumption', 'baseFee')">Grundgebühr</th>
+                                <th class="text-right px-6 py-4 text-sm font-semibold text-dark-400 sortable" data-sort="multistream" onclick="sortTable('consumption', 'multistream')">Multistreaming</th>
+                                <th class="text-right px-6 py-4 text-sm font-semibold text-dark-400 sortable" data-sort="videohost" onclick="sortTable('consumption', 'videohost')">Videohosting</th>
+                                <th class="text-right px-6 py-4 text-sm font-semibold text-dark-400 sortable" data-sort="domain" onclick="sortTable('consumption', 'domain')">Domain</th>
+                                <th class="text-right px-6 py-4 text-sm font-semibold text-dark-400 sortable" data-sort="crosspost" onclick="sortTable('consumption', 'crosspost')">Crossposting</th>
+                                <th class="text-right px-6 py-4 text-sm font-semibold text-dark-400 sortable" data-sort="total" onclick="sortTable('consumption', 'total')">Gesamt</th>
+                            </tr>
+                        </thead>
+                        <tbody id="consumptionTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js?v=6"></script>
+</body>
+</html>

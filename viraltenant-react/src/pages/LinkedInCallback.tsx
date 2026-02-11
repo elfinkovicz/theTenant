@@ -1,0 +1,118 @@
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { Loader2, CheckCircle, XCircle } from 'lucide-react'
+import { awsConfig } from '../config/aws-config'
+import { useAuthStore } from '../store/authStore'
+import { autoChannelService } from '../services/autoChannel.service'
+
+export const LinkedInCallback = () => {
+  const [searchParams] = useSearchParams()
+  const { accessToken } = useAuthStore()
+  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
+  const [error, setError] = useState('')
+
+  const code = searchParams.get('code')
+  const state = searchParams.get('state') // Contains tenantId
+  const errorParam = searchParams.get('error')
+
+  useEffect(() => {
+    if (errorParam) {
+      setStatus('error')
+      setError(searchParams.get('error_description') || 'LinkedIn Autorisierung abgelehnt')
+      return
+    }
+
+    if (code && state) {
+      exchangeCodeForToken()
+    } else if (!code) {
+      setStatus('error')
+      setError('Kein Autorisierungscode erhalten')
+    }
+  }, [code, state, errorParam])
+
+  const exchangeCodeForToken = async () => {
+    setStatus('loading')
+    try {
+      const response = await fetch(`${awsConfig.api.user}/linkedin/oauth/callback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+          'X-Creator-ID': state || '319190e1-0791-43b0-bd04-506f959c1471'
+        },
+        body: JSON.stringify({
+          code,
+          tenantId: state,
+          // Zentrale Redirect-URI über viraltenant.com (für alle Tenants)
+          redirectUri: `https://viraltenant.com/linkedin-callback`
+        })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Token-Austausch fehlgeschlagen')
+      }
+
+      setStatus('success')
+      
+      // Auto-add channel to Channels page
+      await autoChannelService.addOrUpdateChannel({
+        platform: 'linkedin',
+        accountName: data.name || data.displayName,
+        profileUrl: data.profileUrl
+      })
+      
+      // Notify parent window that channels were updated
+      if (window.opener) {
+        window.opener.postMessage({ type: 'channel-updated', platform: 'linkedin' }, '*')
+      }
+      localStorage.setItem('channels-updated', Date.now().toString())
+      
+      // Close popup after 1.5 seconds
+      setTimeout(() => {
+        window.close()
+      }, 1500)
+    } catch (err: any) {
+      setStatus('error')
+      setError(err.message)
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-dark-900">
+      <div className="bg-dark-800 rounded-2xl p-8 max-w-md w-full shadow-xl border border-dark-700 text-center">
+        
+        {/* Loading State */}
+        {status === 'loading' && (
+          <>
+            <Loader2 size={48} className="animate-spin text-blue-500 mx-auto mb-4" />
+            <h2 className="text-xl font-semibold mb-2">Verbindung wird hergestellt...</h2>
+            <p className="text-dark-400">Bitte warten</p>
+          </>
+        )}
+
+        {/* Success State */}
+        {status === 'success' && (
+          <>
+            <CheckCircle size={48} className="text-green-500 mx-auto mb-4" />
+            <h2 className="text-xl font-semibold mb-2 text-green-400">LinkedIn verbunden!</h2>
+            <p className="text-dark-400">Dieses Fenster schließt sich automatisch...</p>
+          </>
+        )}
+
+        {/* Error State */}
+        {status === 'error' && (
+          <>
+            <XCircle size={48} className="text-red-500 mx-auto mb-4" />
+            <h2 className="text-xl font-semibold mb-2 text-red-400">Fehler</h2>
+            <p className="text-dark-400 mb-4">{error}</p>
+            <button onClick={() => window.close()} className="btn-secondary">
+              Fenster schließen
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
