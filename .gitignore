@@ -18,27 +18,22 @@ terraform.tfvars
 # 🏗️ TERRAFORM STATE & PLANS
 # ============================================
 
-# Terraform directories and files (global)
+# Terraform provider cache (NOT .terraform.lock.hcl - that should be committed!)
 .terraform/
-.terraform.lock.hcl
+
+# State files (stored in S3 backend, not locally)
 *.tfstate
 *.tfstate.*
 *.tfstate.backup
+terraform-state-backup.json
+
+# Plan files (temporary)
 tfplan
 destroy.tfplan
-terraform-state-backup.json
 plan_output.txt
-response.json
 
-# Infrastructure State Files (legacy paths)
-viraltenant-infrastructure/**/*.tfstate
-viraltenant-infrastructure/**/*.tfstate.*
-viraltenant-infrastructure/**/*.tfstate.backup
-viraltenant-infrastructure/.terraform/
-viraltenant-infrastructure/.terraform.lock.hcl
-viraltenant-infrastructure/tfplan
-viraltenant-infrastructure/destroy.tfplan
-viraltenant-infrastructure/terraform-state-backup.json
+# Temporary response files
+response.json
 
 # ============================================
 # 🔧 LAMBDA BUILD ARTIFACTS
