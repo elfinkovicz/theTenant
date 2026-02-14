@@ -694,12 +694,16 @@ async function getTenantMembers(tenantId) {
         
         const emailAttr = userResult.UserAttributes?.find(attr => attr.Name === 'email');
         const nameAttr = userResult.UserAttributes?.find(attr => attr.Name === 'name');
+        const usernameAttr = userResult.UserAttributes?.find(attr => attr.Name === 'custom:username');
         const emailVerifiedAttr = userResult.UserAttributes?.find(attr => attr.Name === 'email_verified');
+        
+        // Use name if available, otherwise fall back to custom:username
+        const displayName = nameAttr?.Value || usernameAttr?.Value || null;
         
         return {
           user_id: member.user_id,
           email: emailAttr?.Value || 'Unbekannt',
-          name: nameAttr?.Value || null,
+          name: displayName,
           role: member.role || 'user',
           email_verified: emailVerifiedAttr?.Value === 'true',
           status: userResult.UserStatus || 'UNKNOWN',

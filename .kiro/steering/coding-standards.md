@@ -83,7 +83,7 @@ exports.handler = async (event) => {
 ```
 
 ### DynamoDB-Konventionen
-- Tabelle: `viraltenant-tenant-{feature}-prod`
+- Tabelle: `viraltenant-tenant-{feature}-production`
 - Keys: `tenant_id` (Hash) + `{item}_id` (Range)
 - Timestamps: `created_at`, `updated_at` (ISO 8601)
 

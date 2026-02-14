@@ -1422,6 +1422,8 @@ resource "aws_lambda_function" "crosspost_settings" {
       LINKEDIN_CLIENT_SECRET = var.linkedin_client_secret
       TWITTER_CLIENT_ID     = var.twitter_client_id
       TWITTER_CLIENT_SECRET = var.twitter_client_secret
+      TWITTER_CONSUMER_KEY      = var.twitter_consumer_key
+      TWITTER_CONSUMER_SECRET   = var.twitter_consumer_secret
       TIKTOK_CLIENT_KEY    = var.tiktok_client_key
       TIKTOK_CLIENT_SECRET = var.tiktok_client_secret
     }

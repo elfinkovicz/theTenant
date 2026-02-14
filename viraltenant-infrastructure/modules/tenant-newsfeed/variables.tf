@@ -106,6 +106,20 @@ variable "twitter_client_secret" {
   type        = string
   sensitive   = true
 }
+
+variable "twitter_consumer_key" {
+  description = "X (Twitter) OAuth 1.0a Consumer Key (API Key) - für Posting + Media Upload"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "twitter_consumer_secret" {
+  description = "X (Twitter) OAuth 1.0a Consumer Secret (API Key Secret) - für Posting + Media Upload"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
 variable "tiktok_client_key" {
   description = "TikTok Client Key for OAuth"
   type        = string

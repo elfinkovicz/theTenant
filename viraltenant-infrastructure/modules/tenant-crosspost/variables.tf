@@ -67,6 +67,36 @@ variable "tiktok_client_secret" {
   default     = ""
 }
 
+# X (Twitter) OAuth 1.0a Consumer Keys (Plattform-weit für Posting + Media Upload)
+variable "twitter_consumer_key" {
+  type        = string
+  description = "X (Twitter) OAuth 1.0a Consumer Key (API Key)"
+  sensitive   = true
+  default     = ""
+}
+
+variable "twitter_consumer_secret" {
+  type        = string
+  description = "X (Twitter) OAuth 1.0a Consumer Secret (API Key Secret)"
+  sensitive   = true
+  default     = ""
+}
+
+# X (Twitter) OAuth 2.0 Client Credentials (für Token Exchange + Refresh)
+variable "twitter_client_id" {
+  type        = string
+  description = "X (Twitter) OAuth 2.0 Client ID"
+  sensitive   = true
+  default     = ""
+}
+
+variable "twitter_client_secret" {
+  type        = string
+  description = "X (Twitter) OAuth 2.0 Client Secret"
+  sensitive   = true
+  default     = ""
+}
+
 # Snapchat Settings
 variable "snapchat_settings_table_name" { type = string }
 variable "snapchat_settings_table_arn" { type = string }

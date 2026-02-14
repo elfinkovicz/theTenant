@@ -8,7 +8,7 @@
  */
 
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, GetCommand } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBDocumentClient, GetCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 
 const dynamoClient = new DynamoDBClient({ region: process.env.REGION });
@@ -139,6 +139,40 @@ async function invokeChannelLambda(channel, payload) {
   }
 }
 
+// Increment postsToday counter in the channel's settings table
+async function incrementPostCount(channel, tenantId) {
+  const config = CHANNELS[channel];
+  if (!config || !config.settingsTable) return;
+  
+  const today = new Date().toISOString().split('T')[0];
+  
+  try {
+    // First get current settings to check if we need to reset
+    const result = await dynamodb.send(new GetCommand({
+      TableName: config.settingsTable,
+      Key: { tenant_id: tenantId }
+    }));
+    
+    const settings = result.Item || {};
+    const lastReset = settings.postsLastReset || '';
+    const currentCount = lastReset === today ? (settings.postsToday || 0) : 0;
+    
+    await dynamodb.send(new UpdateCommand({
+      TableName: config.settingsTable,
+      Key: { tenant_id: tenantId },
+      UpdateExpression: 'SET postsToday = :pt, postsLastReset = :plr',
+      ExpressionAttributeValues: {
+        ':pt': currentCount + 1,
+        ':plr': today
+      }
+    }));
+    
+    console.log(`${channel}: Post count updated to ${currentCount + 1}`);
+  } catch (error) {
+    console.error(`Error updating post count for ${channel}:`, error.message);
+  }
+}
+
 exports.handler = async (event) => {
   console.log('Crosspost Dispatcher received event:', JSON.stringify(event));
   
@@ -185,7 +219,13 @@ exports.handler = async (event) => {
     
     promises.push(
       invokeChannelLambda(channel, payload)
-        .then(result => results.push(result))
+        .then(async (result) => {
+          results.push(result);
+          // Increment post counter on successful dispatch
+          if (result?.status === 'invoked') {
+            await incrementPostCount(channel, tenantId);
+          }
+        })
         .catch(err => results.push({ channel, status: 'error', error: err.message }))
     );
   }

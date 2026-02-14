@@ -1,0 +1,35 @@
+﻿terraform : 
+In Zeile:1 Zeichen:1
++ terraform plan -no-color 2>&1 | Out-File -FilePath 
+plan-output.txt -E ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], 
+    RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Error: Error acquiring the state lock
+
+Error message: operation error DynamoDB: PutItem, https 
+response error
+StatusCode: 400, RequestID:
+JV6E3FUQIQOC4RRL6PQMKPL7TVVV4KQNSO5AEMVJF66Q9ASUAAJG,
+ConditionalCheckFailedException: The conditional request 
+failed
+Lock Info:
+  ID:        89f1d115-e400-6439-83a1-613052cf72ed
+  Path:      creator-platform-terraform-state-multitenant/
+terraform.tfstate
+  Operation: OperationTypePlan
+  Who:       DESKTOP-7R4U5JS\email@DESKTOP-7R4U5JS
+  Version:   1.14.0
+  Created:   2026-02-14 09:15:19.2304758 +0000 UTC
+  Info:      
+
+
+Terraform acquires a state lock to protect the state from 
+being written
+by multiple users at the same time. Please resolve the 
+issue above and try
+again. For most commands, you can disable locking with 
+the "-lock=false"
+flag, but this is not recommended.

@@ -130,13 +130,24 @@ async function postToLinkedIn(tenantId, post, settings) {
     }
   }
   
-  if (!personUrn) {
-    throw new Error('LinkedIn: No person URN available');
+  // Determine author: organization page or personal profile
+  let authorUrn;
+  if (settings.postAsOrganization && settings.organizationId) {
+    authorUrn = `urn:li:organization:${settings.organizationId}`;
+    console.log('LinkedIn: Posting as organization:', authorUrn);
+  } else if (personUrn) {
+    authorUrn = personUrn;
+    console.log('LinkedIn: Posting as person:', authorUrn);
+  } else {
+    throw new Error('LinkedIn: No person URN or organization available');
   }
+  
+  // Owner URN for media uploads (same as author)
+  const ownerUrn = authorUrn;
   
   // Create post using UGC API
   const postData = {
-    author: personUrn,
+    author: authorUrn,
     lifecycleState: 'PUBLISHED',
     specificContent: {
       'com.linkedin.ugc.ShareContent': {
@@ -152,7 +163,7 @@ async function postToLinkedIn(tenantId, post, settings) {
   // Try video upload first (16:9 or 9:16)
   if (videoUrl) {
     console.log('LinkedIn: Attempting video upload...');
-    const videoAsset = await uploadLinkedInVideo(settings.accessToken, personUrn, videoUrl);
+    const videoAsset = await uploadLinkedInVideo(settings.accessToken, ownerUrn, videoUrl);
     
     if (videoAsset) {
       postData.specificContent['com.linkedin.ugc.ShareContent'].shareMediaCategory = 'VIDEO';
@@ -165,7 +176,7 @@ async function postToLinkedIn(tenantId, post, settings) {
     } else if (imageUrl) {
       // Fallback to image if video upload fails
       console.log('LinkedIn: Video upload failed, falling back to image...');
-      const imageAsset = await uploadLinkedInImage(settings.accessToken, personUrn, imageUrl);
+      const imageAsset = await uploadLinkedInImage(settings.accessToken, ownerUrn, imageUrl);
       if (imageAsset) {
         postData.specificContent['com.linkedin.ugc.ShareContent'].shareMediaCategory = 'IMAGE';
         postData.specificContent['com.linkedin.ugc.ShareContent'].media = [{
@@ -176,7 +187,7 @@ async function postToLinkedIn(tenantId, post, settings) {
     }
   } else if (imageUrl) {
     // Upload image
-    const imageAsset = await uploadLinkedInImage(settings.accessToken, personUrn, imageUrl);
+    const imageAsset = await uploadLinkedInImage(settings.accessToken, ownerUrn, imageUrl);
     if (imageAsset) {
       postData.specificContent['com.linkedin.ugc.ShareContent'].shareMediaCategory = 'IMAGE';
       postData.specificContent['com.linkedin.ugc.ShareContent'].media = [{

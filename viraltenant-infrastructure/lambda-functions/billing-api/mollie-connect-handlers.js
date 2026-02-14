@@ -325,7 +325,7 @@ async function handleConnectCallback(queryParams) {
 
 /**
  * GET /billing/mollie/connect/status/{tenantId}
- * Prüft ob Creator Mollie Connect verbunden hat
+ * Prüft ob Creator Mollie Connect verbunden hat und refresht Token automatisch
  */
 async function getConnectStatus(tenantId) {
   try {
@@ -346,6 +346,43 @@ async function getConnectStatus(tenantId) {
     const isExpired = tenant.Item.mollie_connect_expires_at && 
                       new Date(tenant.Item.mollie_connect_expires_at) < new Date();
 
+    // If connected but token expired, try to auto-refresh
+    if (isConnected && isExpired && tenant.Item.mollie_connect_refresh_token) {
+      try {
+        console.log(`Auto-refreshing Mollie token for tenant ${tenantId}`);
+        await refreshAccessToken(tenantId);
+        
+        // Token refreshed successfully
+        return {
+          statusCode: 200,
+          headers: corsHeaders,
+          body: JSON.stringify({
+            connected: true,
+            organizationId: tenant.Item.mollie_connect_organization_id,
+            organizationName: tenant.Item.mollie_connect_organization_name,
+            connectedAt: tenant.Item.mollie_connect_connected_at,
+            needsReconnect: false,
+            tokenRefreshed: true
+          })
+        };
+      } catch (refreshError) {
+        console.error('Auto-refresh failed:', refreshError.message);
+        // Refresh failed (refresh token also expired) - user needs to reconnect
+        return {
+          statusCode: 200,
+          headers: corsHeaders,
+          body: JSON.stringify({
+            connected: false,
+            organizationId: tenant.Item.mollie_connect_organization_id,
+            organizationName: tenant.Item.mollie_connect_organization_name,
+            connectedAt: tenant.Item.mollie_connect_connected_at,
+            needsReconnect: true,
+            refreshError: 'Refresh Token abgelaufen - bitte erneut verbinden'
+          })
+        };
+      }
+    }
+
     return {
       statusCode: 200,
       headers: corsHeaders,
@@ -354,7 +391,7 @@ async function getConnectStatus(tenantId) {
         organizationId: tenant.Item.mollie_connect_organization_id,
         organizationName: tenant.Item.mollie_connect_organization_name,
         connectedAt: tenant.Item.mollie_connect_connected_at,
-        needsReconnect: isExpired
+        needsReconnect: isExpired && !tenant.Item.mollie_connect_refresh_token
       })
     };
   } catch (error) {

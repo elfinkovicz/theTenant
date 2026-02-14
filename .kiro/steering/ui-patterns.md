@@ -96,3 +96,45 @@ fileMatchPattern: "**/*.tsx"
 | Primär | `primary-500`, `primary-600` |
 | Fehler | `red-500`, `red-600` |
 | Erfolg | `green-500` |
+
+## Externe Weiterleitungen (OAuth, Zahlungsanbieter)
+Bei Weiterleitungen zu externen Diensten (OAuth, Mollie, YouTube, Twitch, etc.) IMMER einen neuen Tab öffnen:
+
+```tsx
+// RICHTIG: Neuer Tab
+window.open(externalUrl, '_blank', 'noopener,noreferrer')
+
+// FALSCH: Gleicher Tab (verliert Kontext)
+window.location.href = externalUrl
+```
+
+**Warum?**
+- User verliert nicht den aktuellen Kontext/Formular
+- Callback-Seite kann via `localStorage` Events kommunizieren
+- Bessere UX bei OAuth-Flows (Mollie Connect, YouTube, Twitch, TikTok, etc.)
+
+## Info-Tooltips für Funktionserklärungen
+Bei komplexen Funktionen oder Einstellungen IMMER ein Info-Icon (ⓘ) mit Hover-Tooltip hinzufügen:
+
+```tsx
+import { InfoTooltip } from '@components/ui/InfoTooltip'
+
+// Neben Labels verwenden
+<label className="flex items-center gap-2">
+  Exklusiv für Mitglieder
+  <InfoTooltip text="Nur zahlende Mitglieder können diesen Inhalt sehen." />
+</label>
+
+// Positionen: top (default), bottom, left, right
+<InfoTooltip text="Erklärung..." position="right" />
+
+// Größe anpassen
+<InfoTooltip text="Erklärung..." size={16} />
+```
+
+**Wann verwenden?**
+- Bei Toggle-Switches (Exklusiv, Veröffentlicht, etc.)
+- Bei Dropdown-Optionen die nicht selbsterklärend sind
+- Bei technischen Einstellungen (RTMP, Stream-Key, etc.)
+- Bei Preisangaben und Gebühren
+- Bei Plattform-spezifischen Limits (TikTok Dauer, etc.)

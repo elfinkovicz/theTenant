@@ -147,11 +147,16 @@ resource "aws_lambda_function" "crosspost_xtwitter" {
   layers           = [var.common_deps_layer_arn]
   environment {
     variables = {
-      REGION                  = var.aws_region
-      CLOUDFRONT_DOMAIN       = var.cloudfront_domain_name
-      XTWITTER_SETTINGS_TABLE = var.xtwitter_settings_table_name
-      ENCRYPTION_KEY          = var.encryption_key
-      ASSETS_BUCKET           = var.creator_assets_bucket_name
+      REGION                    = var.aws_region
+      CLOUDFRONT_DOMAIN         = var.cloudfront_domain_name
+      XTWITTER_SETTINGS_TABLE   = var.xtwitter_settings_table_name
+      ENCRYPTION_KEY            = var.encryption_key
+      ASSETS_BUCKET             = var.creator_assets_bucket_name
+      TENANTS_TABLE             = var.tenants_table_name
+      TWITTER_CONSUMER_KEY      = var.twitter_consumer_key
+      TWITTER_CONSUMER_SECRET   = var.twitter_consumer_secret
+      TWITTER_CLIENT_ID         = var.twitter_client_id
+      TWITTER_CLIENT_SECRET     = var.twitter_client_secret
     }
   }
   tags = merge(var.tags, { BillingGroup = "crosspost" })

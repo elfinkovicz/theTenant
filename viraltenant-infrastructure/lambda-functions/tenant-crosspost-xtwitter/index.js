@@ -1,7 +1,9 @@
 /**
  * X (Twitter) Crosspost Lambda
  * 
- * Handles posting to X/Twitter with OAuth 1.0a.
+ * Handles posting to X/Twitter with OAuth 1.0a + OAuth 2.0.
+ * - OAuth 1.0a: Media Upload + Posting (Consumer Keys aus Env-Vars, Access Tokens per Tenant)
+ * - OAuth 2.0: Text-only Tweets als Fallback
  * Supports images and videos (including Shorts) up to 512MB.
  * 
  * Uses central dependencies from Lambda Layer.
@@ -18,6 +20,22 @@ const s3 = new S3Client({ region: process.env.REGION });
 
 const SETTINGS_TABLE = process.env.XTWITTER_SETTINGS_TABLE;
 
+// Plattform-weite Consumer Keys (OAuth 1.0a) aus Environment-Variablen
+const PLATFORM_CONSUMER_KEY = process.env.TWITTER_CONSUMER_KEY || '';
+const PLATFORM_CONSUMER_SECRET = process.env.TWITTER_CONSUMER_SECRET || '';
+
+/**
+ * Resolve OAuth 1.0a credentials: Plattform-Consumer-Keys + per-Tenant Access Tokens
+ */
+function getOAuth1Credentials(settings) {
+  return {
+    apiKey: PLATFORM_CONSUMER_KEY || settings.apiKey || '',
+    apiSecret: PLATFORM_CONSUMER_SECRET || settings.apiSecret || '',
+    accessToken: settings.accessToken || '',
+    accessTokenSecret: settings.accessTokenSecret || ''
+  };
+}
+
 // ============================================
 // OAUTH FUNCTIONS
 // ============================================
@@ -25,11 +43,15 @@ const SETTINGS_TABLE = process.env.XTWITTER_SETTINGS_TABLE;
 async function handleOAuthCallback(code, redirectUri, codeVerifier, tenantId) {
   const settings = await getSettings(tenantId);
   
-  if (!settings.clientId || !settings.clientSecret) {
-    throw new Error('X Client ID und Secret müssen zuerst in den Einstellungen hinterlegt werden');
+  // Use platform-wide OAuth 2.0 credentials from env vars
+  const clientId = process.env.TWITTER_CLIENT_ID || settings.clientId;
+  const clientSecret = process.env.TWITTER_CLIENT_SECRET || settings.clientSecret;
+  
+  if (!clientId || !clientSecret) {
+    throw new Error('X OAuth nicht konfiguriert. Bitte Administrator kontaktieren.');
   }
   
-  const credentials = Buffer.from(`${settings.clientId}:${settings.clientSecret}`).toString('base64');
+  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
   
   const params = new URLSearchParams();
   params.append('code', code);
@@ -84,20 +106,24 @@ async function handleOAuthCallback(code, redirectUri, codeVerifier, tenantId) {
 async function refreshToken(tenantId) {
   const settings = await getSettings(tenantId);
   
-  if (!settings.oauth2RefreshToken || !settings.clientId || !settings.clientSecret) {
+  // Use platform-wide OAuth 2.0 credentials from env vars
+  const clientId = process.env.TWITTER_CLIENT_ID || settings.clientId;
+  const clientSecret = process.env.TWITTER_CLIENT_SECRET || settings.clientSecret;
+  
+  if (!settings.oauth2RefreshToken || !clientId || !clientSecret) {
     console.log('X: Refresh token not available - missing credentials');
     throw new Error('Refresh token not available - User needs to re-authenticate');
   }
   
   console.log('X: Attempting token refresh...');
   console.log('X: Refresh token (first 20 chars):', settings.oauth2RefreshToken.substring(0, 20) + '...');
-  console.log('X: Client ID:', settings.clientId.substring(0, 10) + '...');
+  console.log('X: Client ID:', clientId.substring(0, 10) + '...');
   
-  const credentials = Buffer.from(`${settings.clientId}:${settings.clientSecret}`).toString('base64');
+  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
   const params = new URLSearchParams();
   params.append('refresh_token', settings.oauth2RefreshToken);
   params.append('grant_type', 'refresh_token');
-  params.append('client_id', settings.clientId); // Twitter sometimes requires this in body too
+  params.append('client_id', clientId); // Twitter sometimes requires this in body too
   
   console.log('X: Token refresh request - Authorization header present: true');
   
@@ -195,7 +221,8 @@ function generateOAuth1Signature(method, url, params, settings) {
 }
 
 async function uploadMediaOAuth1(settings, mediaBuffer, isVideo = false) {
-  if (!settings.apiKey || !settings.apiSecret || !settings.accessToken || !settings.accessTokenSecret) {
+  const creds = getOAuth1Credentials(settings);
+  if (!creds.apiKey || !creds.apiSecret || !creds.accessToken || !creds.accessTokenSecret) {
     console.log('X: OAuth 1.0a credentials not available for media upload');
     return null;
   }
@@ -214,7 +241,7 @@ async function uploadMediaOAuth1(settings, mediaBuffer, isVideo = false) {
   
   // For media_data uploads, the media_data is NOT included in signature
   // Only OAuth params are signed for multipart/form-data style uploads
-  const authHeader = generateOAuth1Signature('POST', url, {}, settings);
+  const authHeader = generateOAuth1Signature('POST', url, {}, creds);
   
   console.log('X: Attempting simple media upload...');
   
@@ -249,7 +276,8 @@ async function uploadMediaMultipart(settings, mediaBuffer) {
   const boundary = '----TwitterBoundary' + crypto.randomBytes(8).toString('hex');
   
   // For multipart, OAuth params only (no body params in signature)
-  const authHeader = generateOAuth1Signature('POST', url, {}, settings);
+  const creds = getOAuth1Credentials(settings);
+  const authHeader = generateOAuth1Signature('POST', url, {}, creds);
   
   // Build multipart body
   const parts = [];
@@ -287,6 +315,7 @@ async function chunkedMediaUpload(settings, mediaBuffer, isVideo) {
   const mediaType = isVideo ? 'video/mp4' : 'image/jpeg';
   const mediaCategory = isVideo ? 'tweet_video' : 'tweet_image';
   const url = 'https://upload.twitter.com/1.1/media/upload.json';
+  const creds = getOAuth1Credentials(settings);
   
   console.log(`X: Starting chunked upload for ${isVideo ? 'video' : 'image'}: ${sizeMB.toFixed(1)}MB`);
   
@@ -305,7 +334,7 @@ async function chunkedMediaUpload(settings, mediaBuffer, isVideo) {
       media_category: mediaCategory
     };
     
-    const initAuthHeader = generateOAuth1Signature('POST', url, initParams, settings);
+    const initAuthHeader = generateOAuth1Signature('POST', url, initParams, creds);
     
     const initResponse = await fetch(url, {
       method: 'POST',
@@ -341,7 +370,7 @@ async function chunkedMediaUpload(settings, mediaBuffer, isVideo) {
         segment_index: segmentIndex.toString()
       };
       
-      const appendAuthHeader = generateOAuth1Signature('POST', url, appendParams, settings);
+      const appendAuthHeader = generateOAuth1Signature('POST', url, appendParams, creds);
       
       const appendResponse = await fetch(url, {
         method: 'POST',
@@ -368,7 +397,7 @@ async function chunkedMediaUpload(settings, mediaBuffer, isVideo) {
       media_id: mediaId
     };
     
-    const finalizeAuthHeader = generateOAuth1Signature('POST', url, finalizeParams, settings);
+    const finalizeAuthHeader = generateOAuth1Signature('POST', url, finalizeParams, creds);
     
     const finalizeResponse = await fetch(url, {
       method: 'POST',
@@ -397,7 +426,7 @@ async function chunkedMediaUpload(settings, mediaBuffer, isVideo) {
         await new Promise(resolve => setTimeout(resolve, checkAfterSecs * 1000));
         
         const statusParams = { command: 'STATUS', media_id: mediaId };
-        const statusAuthHeader = generateOAuth1Signature('GET', url, statusParams, settings);
+        const statusAuthHeader = generateOAuth1Signature('GET', url, statusParams, creds);
         
         const statusResponse = await fetch(`${url}?command=STATUS&media_id=${mediaId}`, {
           method: 'GET',
@@ -569,9 +598,66 @@ async function postTweet(tenantId, post, settings) {
     }
   }
   
-  // Post tweet with OAuth 1.0a (always use this now)
-  console.log('X: Posting tweet, hasMedia:', !!mediaId, 'isShort:', post.isShort);
-  return await postTweetOAuth1(settings, tweetText, mediaId);
+  // Post tweet - prefer OAuth 1.0a (supports media), fallback to OAuth 2.0 (text only)
+  const creds = getOAuth1Credentials(settings);
+  const hasOAuth1 = creds.apiKey && creds.apiSecret && creds.accessToken && creds.accessTokenSecret;
+  
+  console.log('X: Posting tweet, hasMedia:', !!mediaId, 'isShort:', post.isShort, 'hasOAuth1:', hasOAuth1, 'hasOAuth2:', !!settings.oauth2AccessToken);
+  
+  if (hasOAuth1) {
+    return await postTweetOAuth1(settings, tweetText, mediaId);
+  } else if (settings.oauth2AccessToken) {
+    // OAuth 2.0 fallback - text only (no media support)
+    if (mediaId) {
+      console.log('X: Warning - OAuth 2.0 kann keine Medien posten, nur Text');
+    }
+    return await postTweetOAuth2(tenantId, settings, tweetText);
+  } else {
+    throw new Error('X nicht konfiguriert - bitte erneut mit X verbinden');
+  }
+}
+
+/**
+ * Post tweet using OAuth 2.0 Bearer Token - text only (no media support)
+ */
+async function postTweetOAuth2(tenantId, settings, text) {
+  let accessToken = settings.oauth2AccessToken;
+  
+  const tweetPayload = { text };
+  
+  let response = await fetch('https://api.twitter.com/2/tweets', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(tweetPayload)
+  });
+  
+  // Token expired? Try refresh
+  if (response.status === 401 && settings.oauth2RefreshToken) {
+    console.log('X: OAuth 2.0 token expired, refreshing...');
+    accessToken = await refreshToken(tenantId);
+    
+    response = await fetch('https://api.twitter.com/2/tweets', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(tweetPayload)
+    });
+  }
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.log('X: OAuth 2.0 tweet failed:', response.status, errorText);
+    throw new Error(`Tweet fehlgeschlagen: ${response.status}`);
+  }
+  
+  const data = await response.json();
+  console.log('X: Tweet posted via OAuth 2.0, id:', data.data?.id);
+  return { success: true, tweetId: data.data?.id };
 }
 
 /**
@@ -580,6 +666,7 @@ async function postTweet(tenantId, post, settings) {
 async function postTweetOAuth1(settings, text, mediaId) {
   // Twitter Free Tier: Use v2 API for tweets, but with OAuth 1.0a auth
   const url = 'https://api.twitter.com/2/tweets';
+  const creds = getOAuth1Credentials(settings);
   
   const tweetPayload = { text: text };
   if (mediaId) {
@@ -587,7 +674,7 @@ async function postTweetOAuth1(settings, text, mediaId) {
   }
   
   // Generate OAuth 1.0a signature for v2 endpoint (no body params in signature for JSON)
-  const authHeader = generateOAuth1Signature('POST', url, {}, settings);
+  const authHeader = generateOAuth1Signature('POST', url, {}, creds);
   
   const response = await fetch(url, {
     method: 'POST',
@@ -676,7 +763,9 @@ exports.handler = async (event) => {
     
     // Post to X
     if (action === 'post' || (!action && post)) {
-      if (!settings?.oauth2AccessToken && !settings?.accessToken) {
+      const creds = getOAuth1Credentials(settings);
+      const hasOAuth1 = creds.apiKey && creds.apiSecret && creds.accessToken && creds.accessTokenSecret;
+      if (!settings?.oauth2AccessToken && !hasOAuth1) {
         return { statusCode: 400, error: 'X not configured' };
       }
       
@@ -687,26 +776,47 @@ exports.handler = async (event) => {
     // Test connection
     if (action === 'test') {
       const testSettings = settings || await getSettings(tenantId);
+      const creds = getOAuth1Credentials(testSettings);
       
-      // Check if OAuth 1.0a credentials are configured
-      if (!testSettings.apiKey || !testSettings.apiSecret || !testSettings.accessToken || !testSettings.accessTokenSecret) {
+      // Check if OAuth 1.0a or OAuth 2.0 credentials are configured
+      const hasOAuth1 = creds.apiKey && creds.apiSecret && creds.accessToken && creds.accessTokenSecret;
+      const hasOAuth2 = !!testSettings.oauth2AccessToken;
+      
+      if (!hasOAuth1 && !hasOAuth2) {
         return { 
           statusCode: 400, 
           body: JSON.stringify({ 
-            error: 'X API Keys nicht vollständig konfiguriert. Bitte alle 4 Keys eingeben.' 
+            error: 'X nicht verbunden. Bitte über "Mit X verbinden" Button verbinden.' 
           }) 
         };
       }
       
-      // Test by verifying credentials with Twitter API
       try {
-        const url = 'https://api.twitter.com/2/users/me';
-        const authHeader = generateOAuth1Signature('GET', url, {}, testSettings);
-        
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: { 'Authorization': authHeader }
-        });
+        let response;
+        if (hasOAuth1) {
+          // Test with OAuth 1.0a
+          const url = 'https://api.twitter.com/2/users/me';
+          const authHeader = generateOAuth1Signature('GET', url, {}, creds);
+          response = await fetch(url, {
+            method: 'GET',
+            headers: { 'Authorization': authHeader }
+          });
+        } else {
+          // Test with OAuth 2.0
+          response = await fetch('https://api.twitter.com/2/users/me', {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${testSettings.oauth2AccessToken}` }
+          });
+          
+          // Token expired? Try refresh
+          if (response.status === 401 && testSettings.oauth2RefreshToken) {
+            const newToken = await refreshToken(tenantId);
+            response = await fetch('https://api.twitter.com/2/users/me', {
+              method: 'GET',
+              headers: { 'Authorization': `Bearer ${newToken}` }
+            });
+          }
+        }
         
         if (response.ok) {
           const userData = await response.json();

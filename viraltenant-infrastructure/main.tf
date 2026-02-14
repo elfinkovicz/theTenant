@@ -506,8 +506,10 @@ module "tenant_newsfeed" {
   google_client_secret   = var.google_client_secret
   linkedin_client_id     = var.linkedin_client_id
   linkedin_client_secret = var.linkedin_client_secret
-  twitter_client_id      = var.twitter_client_id
-  twitter_client_secret  = var.twitter_client_secret
+  twitter_client_id       = var.twitter_client_id
+  twitter_client_secret   = var.twitter_client_secret
+  twitter_consumer_key    = var.twitter_consumer_key
+  twitter_consumer_secret = var.twitter_consumer_secret
   tiktok_client_key      = var.tiktok_client_key
   tiktok_client_secret   = var.tiktok_client_secret
   snapchat_client_id     = var.snapchat_client_id
@@ -677,6 +679,14 @@ module "tenant_crosspost" {
   # Snapchat OAuth Credentials
   snapchat_client_id     = var.snapchat_client_id
   snapchat_client_secret = var.snapchat_client_secret
+
+  # X (Twitter) OAuth 1.0a Consumer Keys
+  twitter_consumer_key    = var.twitter_consumer_key
+  twitter_consumer_secret = var.twitter_consumer_secret
+
+  # X (Twitter) OAuth 2.0 Client Credentials
+  twitter_client_id     = var.twitter_client_id
+  twitter_client_secret = var.twitter_client_secret
 
   depends_on = [module.tenant_newsfeed, module.lambda_layers]
 }
@@ -954,4 +964,16 @@ resource "aws_api_gateway_stage" "main" {
   })
 
   depends_on = [aws_api_gateway_deployment.main]
+}
+
+# =============================================================================
+# MOBILE APP DISTRIBUTION
+# =============================================================================
+
+module "mobile_app_distribution" {
+  source = "./modules/mobile-app-distribution"
+
+  platform_name = var.platform_name
+  environment   = var.environment
+  tags          = var.tags
 }

@@ -136,3 +136,10 @@ nosetests.xml
 coverage.xml
 *.cover
 .hypothesis/
+
+# ============================================
+# 📦 LARGE FILES & ARCHIVES
+# ============================================
+*.rar
+backup0.94
+package-lock.json

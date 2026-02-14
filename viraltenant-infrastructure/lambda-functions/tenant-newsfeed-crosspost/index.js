@@ -410,8 +410,8 @@ async function exchangeInstagramLiveCode(code, redirectUri, tenantId) {
   };
 }
 
-// LinkedIn OAuth token exchange
-async function exchangeLinkedInCode(code, redirectUri, tenantId) {
+// LinkedIn OAuth token exchange (with optional organization page selection)
+async function exchangeLinkedInCode(code, redirectUri, tenantId, selectedOrgId = null) {
   // Use global LinkedIn credentials from environment variables
   const clientId = process.env.LINKEDIN_CLIENT_ID;
   const clientSecret = process.env.LINKEDIN_CLIENT_SECRET;
@@ -453,18 +453,14 @@ async function exchangeLinkedInCode(code, redirectUri, tenantId) {
   // Try to extract person ID from id_token (JWT) if available
   if (idToken) {
     try {
-      // Decode JWT payload (middle part)
       const parts = idToken.split('.');
       if (parts.length === 3) {
         const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
         console.log('LinkedIn ID token payload:', JSON.stringify(payload));
-        
-        // The 'sub' claim contains the member ID
         if (payload.sub) {
           personUrn = `urn:li:person:${payload.sub}`;
           console.log('Got person URN from id_token:', personUrn);
         }
-        // Get display name if available
         if (payload.name) {
           displayName = payload.name;
         }
@@ -478,9 +474,7 @@ async function exchangeLinkedInCode(code, redirectUri, tenantId) {
   if (!personUrn) {
     try {
       const userInfoResponse = await fetch('https://api.linkedin.com/v2/userinfo', {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
+        headers: { 'Authorization': `Bearer ${accessToken}` }
       });
       if (userInfoResponse.ok) {
         const userInfo = await userInfoResponse.json();
@@ -495,7 +489,7 @@ async function exchangeLinkedInCode(code, redirectUri, tenantId) {
     }
   }
   
-  // Last fallback: Try /v2/me (might work with some app configurations)
+  // Last fallback: Try /v2/me
   if (!personUrn) {
     try {
       const meResponse = await fetch('https://api.linkedin.com/v2/me', {
@@ -514,7 +508,53 @@ async function exchangeLinkedInCode(code, redirectUri, tenantId) {
     }
   }
   
-  return { accessToken, personUrn, displayName };
+  // Fetch organization pages the user is admin of
+  let organizationPages = [];
+  try {
+    const orgResponse = await fetch('https://api.linkedin.com/v2/organizationAcls?q=roleAssignee&role=ADMINISTRATOR&projection=(elements*(organization~(id,localizedName,vanityName,logoV2(original~:playableStreams))))', {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'X-Restli-Protocol-Version': '2.0.0'
+      }
+    });
+    if (orgResponse.ok) {
+      const orgData = await orgResponse.json();
+      console.log('LinkedIn organizationAcls response:', JSON.stringify(orgData));
+      if (orgData.elements && orgData.elements.length > 0) {
+        organizationPages = orgData.elements.map(el => {
+          const org = el['organization~'] || {};
+          return {
+            id: String(org.id),
+            name: org.localizedName || 'Unbekannte Seite',
+            vanityName: org.vanityName || null
+          };
+        }).filter(p => p.id);
+      }
+    } else {
+      console.log('LinkedIn organizationAcls failed:', orgResponse.status, await orgResponse.text().catch(() => ''));
+    }
+  } catch (e) {
+    console.log('Could not fetch organization pages:', e.message);
+  }
+  
+  // If orgs found and no selection yet, return for page selection
+  if (organizationPages.length > 0 && !selectedOrgId) {
+    return {
+      requiresPageSelection: true,
+      pages: organizationPages,
+      accessToken,
+      personUrn,
+      displayName
+    };
+  }
+  
+  // If a specific org was selected
+  let selectedOrg = null;
+  if (selectedOrgId && organizationPages.length > 0) {
+    selectedOrg = organizationPages.find(p => p.id === selectedOrgId);
+  }
+  
+  return { accessToken, personUrn, displayName, selectedOrg };
 }
 
 // YouTube OAuth token exchange
@@ -579,6 +619,137 @@ async function exchangeYouTubeCode(code, redirectUri, tenantId) {
     channelName: channel.snippet.title
   };
 }
+
+// ============================================
+// X (Twitter) OAuth 1.0a - 3-legged Flow
+// ============================================
+
+/**
+ * Generate OAuth 1.0a signature for request signing
+ */
+function generateOAuth1SignatureForSettings(method, url, params, consumerKey, consumerSecret, tokenSecret = '') {
+  const crypto = require('crypto');
+  
+  // Sort and encode parameters
+  const sortedParams = Object.keys(params).sort().map(k => 
+    `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`
+  ).join('&');
+  
+  const signatureBase = [
+    method.toUpperCase(),
+    encodeURIComponent(url),
+    encodeURIComponent(sortedParams)
+  ].join('&');
+  
+  const signingKey = `${encodeURIComponent(consumerSecret)}&${encodeURIComponent(tokenSecret)}`;
+  
+  return crypto.createHmac('sha1', signingKey).update(signatureBase).digest('base64');
+}
+
+/**
+ * Step 1: Get OAuth 1.0a Request Token from X
+ * Returns oauth_token + oauth_token_secret for the authorization redirect
+ */
+async function getOAuth1RequestToken(callbackUrl) {
+  const crypto = require('crypto');
+  const consumerKey = process.env.TWITTER_CONSUMER_KEY;
+  const consumerSecret = process.env.TWITTER_CONSUMER_SECRET;
+  
+  if (!consumerKey || !consumerSecret) {
+    throw new Error('X OAuth 1.0a nicht konfiguriert (Consumer Keys fehlen)');
+  }
+  
+  const url = 'https://api.twitter.com/oauth/request_token';
+  const oauthParams = {
+    oauth_callback: callbackUrl,
+    oauth_consumer_key: consumerKey,
+    oauth_nonce: crypto.randomBytes(16).toString('hex'),
+    oauth_signature_method: 'HMAC-SHA1',
+    oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
+    oauth_version: '1.0'
+  };
+  
+  oauthParams.oauth_signature = generateOAuth1SignatureForSettings('POST', url, oauthParams, consumerKey, consumerSecret);
+  
+  const authHeader = 'OAuth ' + Object.keys(oauthParams).sort().map(k => 
+    `${encodeURIComponent(k)}="${encodeURIComponent(oauthParams[k])}"`
+  ).join(', ');
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Authorization': authHeader }
+  });
+  
+  const responseText = await response.text();
+  
+  if (!response.ok) {
+    console.error('OAuth 1.0a request_token error:', response.status, responseText);
+    throw new Error(`Request Token fehlgeschlagen: ${responseText}`);
+  }
+  
+  const parsed = Object.fromEntries(new URLSearchParams(responseText));
+  
+  if (parsed.oauth_callback_confirmed !== 'true') {
+    throw new Error('OAuth Callback nicht bestätigt');
+  }
+  
+  return {
+    oauthToken: parsed.oauth_token,
+    oauthTokenSecret: parsed.oauth_token_secret
+  };
+}
+
+/**
+ * Step 3: Exchange OAuth 1.0a verifier for Access Token
+ * Called after user authorizes on X and is redirected back
+ */
+async function exchangeOAuth1Verifier(oauthToken, oauthTokenSecret, oauthVerifier) {
+  const crypto = require('crypto');
+  const consumerKey = process.env.TWITTER_CONSUMER_KEY;
+  const consumerSecret = process.env.TWITTER_CONSUMER_SECRET;
+  
+  const url = 'https://api.twitter.com/oauth/access_token';
+  const oauthParams = {
+    oauth_consumer_key: consumerKey,
+    oauth_nonce: crypto.randomBytes(16).toString('hex'),
+    oauth_signature_method: 'HMAC-SHA1',
+    oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
+    oauth_token: oauthToken,
+    oauth_verifier: oauthVerifier,
+    oauth_version: '1.0'
+  };
+  
+  oauthParams.oauth_signature = generateOAuth1SignatureForSettings('POST', url, oauthParams, consumerKey, consumerSecret, oauthTokenSecret);
+  
+  const authHeader = 'OAuth ' + Object.keys(oauthParams).sort().map(k => 
+    `${encodeURIComponent(k)}="${encodeURIComponent(oauthParams[k])}"`
+  ).join(', ');
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Authorization': authHeader }
+  });
+  
+  const responseText = await response.text();
+  
+  if (!response.ok) {
+    console.error('OAuth 1.0a access_token error:', response.status, responseText);
+    throw new Error(`Access Token fehlgeschlagen: ${responseText}`);
+  }
+  
+  const parsed = Object.fromEntries(new URLSearchParams(responseText));
+  
+  return {
+    accessToken: parsed.oauth_token,
+    accessTokenSecret: parsed.oauth_token_secret,
+    userId: parsed.user_id,
+    screenName: parsed.screen_name
+  };
+}
+
+// ============================================
+// X (Twitter) OAuth 2.0 - PKCE Flow (Fallback)
+// ============================================
 
 // X (Twitter) OAuth 2.0 token exchange with PKCE
 async function exchangeXTwitterCode(code, redirectUri, codeVerifier, tenantId) {
@@ -869,43 +1040,85 @@ async function testSignal(settings) {
 }
 
 async function testXTwitter(settings, sendTweet = false) {
-  // Test X connection and optionally send a test tweet
+  // Test X connection - supports OAuth 1.0a (with platform consumer keys) and OAuth 2.0
   const crypto = require('crypto');
   
-  // Check if OAuth 1.0a credentials are configured
-  if (!settings.apiKey || !settings.apiSecret || !settings.accessToken || !settings.accessTokenSecret) {
-    throw new Error('X API Keys nicht vollständig konfiguriert. Bitte alle 4 Keys eingeben.');
+  // Resolve OAuth 1.0a credentials: Platform consumer keys + per-tenant access tokens
+  const consumerKey = process.env.TWITTER_CONSUMER_KEY || settings.apiKey || '';
+  const consumerSecret = process.env.TWITTER_CONSUMER_SECRET || settings.apiSecret || '';
+  const accessToken = settings.accessToken || '';
+  const accessTokenSecret = settings.accessTokenSecret || '';
+  const hasOAuth1 = consumerKey && consumerSecret && accessToken && accessTokenSecret;
+  const hasOAuth2 = !!settings.oauth2AccessToken;
+  
+  if (!hasOAuth1 && !hasOAuth2) {
+    throw new Error('X nicht verbunden. Bitte über "Mit X verbinden" Button verbinden.');
   }
   
-  // First verify credentials with GET /2/users/me
+  // Helper: Generate OAuth 1.0a signature
+  function makeOAuth1Header(method, url) {
+    const oauth = {
+      oauth_consumer_key: consumerKey,
+      oauth_nonce: crypto.randomBytes(16).toString('hex'),
+      oauth_signature_method: 'HMAC-SHA1',
+      oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
+      oauth_token: accessToken,
+      oauth_version: '1.0'
+    };
+    const sortedParams = Object.keys(oauth).sort().map(k => `${encodeURIComponent(k)}=${encodeURIComponent(oauth[k])}`).join('&');
+    const baseString = `${method}&${encodeURIComponent(url)}&${encodeURIComponent(sortedParams)}`;
+    const signingKey = `${encodeURIComponent(consumerSecret)}&${encodeURIComponent(accessTokenSecret)}`;
+    oauth.oauth_signature = crypto.createHmac('sha1', signingKey).update(baseString).digest('base64');
+    return 'OAuth ' + Object.keys(oauth).sort().map(k => `${encodeURIComponent(k)}="${encodeURIComponent(oauth[k])}"`).join(', ');
+  }
+  
+  // Verify credentials
   const verifyUrl = 'https://api.twitter.com/2/users/me';
+  let verifyResponse;
   
-  let oauth = {
-    oauth_consumer_key: settings.apiKey,
-    oauth_nonce: crypto.randomBytes(16).toString('hex'),
-    oauth_signature_method: 'HMAC-SHA1',
-    oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
-    oauth_token: settings.accessToken,
-    oauth_version: '1.0'
-  };
-  
-  let sortedParams = Object.keys(oauth).sort().map(k => `${encodeURIComponent(k)}=${encodeURIComponent(oauth[k])}`).join('&');
-  let baseString = `GET&${encodeURIComponent(verifyUrl)}&${encodeURIComponent(sortedParams)}`;
-  let signingKey = `${encodeURIComponent(settings.apiSecret)}&${encodeURIComponent(settings.accessTokenSecret)}`;
-  oauth.oauth_signature = crypto.createHmac('sha1', signingKey).update(baseString).digest('base64');
-  
-  let authHeader = 'OAuth ' + Object.keys(oauth).sort().map(k => `${encodeURIComponent(k)}="${encodeURIComponent(oauth[k])}"`).join(', ');
-  
-  const verifyResponse = await fetch(verifyUrl, {
-    method: 'GET',
-    headers: { 'Authorization': authHeader }
-  });
+  if (hasOAuth1) {
+    const authHeader = makeOAuth1Header('GET', verifyUrl);
+    verifyResponse = await fetch(verifyUrl, {
+      method: 'GET',
+      headers: { 'Authorization': authHeader }
+    });
+  } else {
+    verifyResponse = await fetch(verifyUrl, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${settings.oauth2AccessToken}` }
+    });
+    
+    // Token expired? Try refresh
+    if (verifyResponse.status === 401 && settings.oauth2RefreshToken) {
+      const clientId = process.env.TWITTER_CLIENT_ID;
+      const clientSecret = process.env.TWITTER_CLIENT_SECRET;
+      if (clientId && clientSecret) {
+        const creds = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+        const params = new URLSearchParams();
+        params.append('refresh_token', settings.oauth2RefreshToken);
+        params.append('grant_type', 'refresh_token');
+        params.append('client_id', clientId);
+        const refreshResp = await fetch('https://api.twitter.com/2/oauth2/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Authorization': `Basic ${creds}` },
+          body: params.toString()
+        });
+        if (refreshResp.ok) {
+          const tokenData = await refreshResp.json();
+          verifyResponse = await fetch(verifyUrl, {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${tokenData.access_token}` }
+          });
+        }
+      }
+    }
+  }
   
   if (!verifyResponse.ok) {
     const errorText = await verifyResponse.text();
     console.error('X verify error:', verifyResponse.status, errorText);
     if (verifyResponse.status === 401) {
-      throw new Error('X API Authentifizierung fehlgeschlagen. Bitte Keys überprüfen.');
+      throw new Error('X Authentifizierung fehlgeschlagen. Bitte erneut verbinden.');
     }
     if (verifyResponse.status === 403) {
       throw new Error('X API Zugriff verweigert. Bitte App Permissions prüfen.');
@@ -916,7 +1129,6 @@ async function testXTwitter(settings, sendTweet = false) {
   const userData = await verifyResponse.json();
   const username = userData.data?.username;
   
-  // If sendTweet is false, just return verification result
   if (!sendTweet) {
     return { 
       success: true, 
@@ -925,56 +1137,35 @@ async function testXTwitter(settings, sendTweet = false) {
     };
   }
   
-  // Send a test tweet using Twitter API v2
+  // Send a test tweet
   const tweetUrl = 'https://api.twitter.com/2/tweets';
   const tweetText = `🧪 Test-Tweet von ViralTenant\n\nDiese Nachricht wurde automatisch gesendet um die X-Integration zu testen.\n\n✅ Crossposting funktioniert!\n\n#ViralTenant #Test`;
   const tweetBody = JSON.stringify({ text: tweetText });
   
-  // Create new OAuth signature for POST request
-  oauth = {
-    oauth_consumer_key: settings.apiKey,
-    oauth_nonce: crypto.randomBytes(16).toString('hex'),
-    oauth_signature_method: 'HMAC-SHA1',
-    oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
-    oauth_token: settings.accessToken,
-    oauth_version: '1.0'
-  };
-  
-  sortedParams = Object.keys(oauth).sort().map(k => `${encodeURIComponent(k)}=${encodeURIComponent(oauth[k])}`).join('&');
-  baseString = `POST&${encodeURIComponent(tweetUrl)}&${encodeURIComponent(sortedParams)}`;
-  signingKey = `${encodeURIComponent(settings.apiSecret)}&${encodeURIComponent(settings.accessTokenSecret)}`;
-  oauth.oauth_signature = crypto.createHmac('sha1', signingKey).update(baseString).digest('base64');
-  
-  authHeader = 'OAuth ' + Object.keys(oauth).sort().map(k => `${encodeURIComponent(k)}="${encodeURIComponent(oauth[k])}"`).join(', ');
-  
-  console.log('X: Sending test tweet...');
-  
-  const tweetResponse = await fetch(tweetUrl, {
-    method: 'POST',
-    headers: { 
-      'Authorization': authHeader,
-      'Content-Type': 'application/json'
-    },
-    body: tweetBody
-  });
+  let tweetResponse;
+  if (hasOAuth1) {
+    const authHeader = makeOAuth1Header('POST', tweetUrl);
+    tweetResponse = await fetch(tweetUrl, {
+      method: 'POST',
+      headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+      body: tweetBody
+    });
+  } else {
+    tweetResponse = await fetch(tweetUrl, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${settings.oauth2AccessToken}`, 'Content-Type': 'application/json' },
+      body: tweetBody
+    });
+  }
   
   const tweetResponseText = await tweetResponse.text();
   console.log('X tweet response:', tweetResponse.status, tweetResponseText);
   
   if (!tweetResponse.ok) {
     let errorData;
-    try {
-      errorData = JSON.parse(tweetResponseText);
-    } catch (e) {
-      errorData = { detail: tweetResponseText };
-    }
-    
-    if (tweetResponse.status === 403) {
-      throw new Error('X API Zugriff verweigert. Bitte stelle sicher, dass deine App "Read and Write" Permissions hat.');
-    }
-    if (tweetResponse.status === 429) {
-      throw new Error('X Rate Limit erreicht. Bitte warte einige Minuten und versuche es erneut.');
-    }
+    try { errorData = JSON.parse(tweetResponseText); } catch (e) { errorData = { detail: tweetResponseText }; }
+    if (tweetResponse.status === 403) throw new Error('X API Zugriff verweigert. Bitte stelle sicher, dass deine App "Read and Write" Permissions hat.');
+    if (tweetResponse.status === 429) throw new Error('X Rate Limit erreicht. Bitte warte einige Minuten.');
     throw new Error(errorData.detail || errorData.title || `Tweet fehlgeschlagen: ${tweetResponse.status}`);
   }
   
@@ -1772,30 +1963,68 @@ exports.handler = async (event) => {
       
       try {
         const body = JSON.parse(event.body || '{}');
-        const { code, redirectUri } = body;
+        const { code, redirectUri, selectedOrgId, selectPersonal } = body;
         
         if (!code || !redirectUri) {
           return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ message: 'Code und Redirect URI erforderlich' }) };
         }
         
-        const { accessToken, personUrn, displayName } = await exchangeLinkedInCode(code, redirectUri, tenantId);
+        const result = await exchangeLinkedInCode(code, redirectUri, tenantId, selectedOrgId);
         
-        // Auto-save the token and person URN to settings
+        // If multiple org pages found, return them for selection (like Facebook Live pattern)
+        if (result.requiresPageSelection) {
+          // Auto-save token already so we don't lose it
+          const currentSettings = await getSettings('linkedin', tenantId);
+          await updateSettings('linkedin', tenantId, {
+            ...currentSettings,
+            accessToken: result.accessToken,
+            personUrn: result.personUrn
+          });
+          
+          return { 
+            statusCode: 200, 
+            headers: corsHeaders, 
+            body: JSON.stringify({ 
+              requiresPageSelection: true,
+              pages: result.pages,
+              personUrn: result.personUrn,
+              displayName: result.displayName
+            }) 
+          };
+        }
+        
+        // Save settings — either with selected org or personal profile
         const currentSettings = await getSettings('linkedin', tenantId);
-        await updateSettings('linkedin', tenantId, {
+        const updatedSettings = {
           ...currentSettings,
-          accessToken: accessToken,
-          personUrn: personUrn, // Save the person URN for later use
-          organizationName: displayName || currentSettings.organizationName // Use display name from OAuth
-        });
+          accessToken: result.accessToken,
+          personUrn: result.personUrn,
+          organizationName: result.selectedOrg ? result.selectedOrg.name : (result.displayName || currentSettings.organizationName),
+          organizationId: result.selectedOrg ? result.selectedOrg.id : '',
+          postAsOrganization: !!result.selectedOrg
+        };
+        
+        // If user explicitly chose personal profile
+        if (selectPersonal) {
+          updatedSettings.organizationId = '';
+          updatedSettings.organizationName = result.displayName || currentSettings.organizationName;
+          updatedSettings.postAsOrganization = false;
+        }
+        
+        await updateSettings('linkedin', tenantId, updatedSettings);
         
         return { 
           statusCode: 200, 
           headers: corsHeaders, 
           body: JSON.stringify({ 
-            message: personUrn ? 'Token und Profil erfolgreich verknüpft!' : 'Token erfolgreich generiert!',
-            accessToken: accessToken,
-            personUrn: personUrn,
+            message: result.selectedOrg 
+              ? `LinkedIn Seite "${result.selectedOrg.name}" erfolgreich verbunden!`
+              : 'LinkedIn Profil erfolgreich verknüpft!',
+            accessToken: result.accessToken,
+            personUrn: result.personUrn,
+            organizationId: result.selectedOrg?.id || '',
+            organizationName: result.selectedOrg?.name || result.displayName || '',
+            postAsOrganization: !!result.selectedOrg,
             expiresIn: '60 Tage'
           }) 
         };
@@ -1808,8 +2037,12 @@ exports.handler = async (event) => {
       }
     }
 
-    // POST oauth/callback - X (Twitter) OAuth 2.0 token exchange
+    // POST oauth/callback - X (Twitter) OAuth (1.0a + 2.0)
     // Path: /xtwitter/oauth/callback
+    // Dispatches based on body params:
+    //   { action: "request-token" } → OAuth 1.0a Step 1: get request token
+    //   { oauthToken, oauthVerifier } → OAuth 1.0a Step 3: exchange verifier
+    //   { code, redirectUri, codeVerifier } → OAuth 2.0 PKCE token exchange
     if (httpMethod === 'POST' && provider === 'xtwitter' && (action === 'oauth' || path.includes('/oauth/callback'))) {
       if (!userId || !(await isUserTenantAdmin(userId, tenantId, isPlatformAdmin))) {
         return { statusCode: 403, headers: corsHeaders, body: JSON.stringify({ message: 'Keine Berechtigung' }) };
@@ -1817,15 +2050,72 @@ exports.handler = async (event) => {
       
       try {
         const body = JSON.parse(event.body || '{}');
-        const { code, redirectUri, codeVerifier } = body;
         
+        // OAuth 1.0a Step 1: Request Token
+        if (body.action === 'request-token') {
+          const callbackUrl = body.callbackUrl || 'https://viraltenant.com/x-callback';
+          const { oauthToken, oauthTokenSecret } = await getOAuth1RequestToken(callbackUrl);
+          
+          // Store token secret in DynamoDB for step 3
+          const currentSettings = await getSettings('xtwitter', tenantId);
+          await updateSettings('xtwitter', tenantId, {
+            ...currentSettings,
+            _pendingOAuthToken: oauthToken,
+            _pendingOAuthTokenSecret: oauthTokenSecret
+          });
+          
+          return {
+            statusCode: 200,
+            headers: corsHeaders,
+            body: JSON.stringify({
+              oauthToken,
+              authorizeUrl: `https://api.twitter.com/oauth/authorize?oauth_token=${oauthToken}`
+            })
+          };
+        }
+        
+        // OAuth 1.0a Step 3: Exchange verifier for access token
+        if (body.oauthToken && body.oauthVerifier) {
+          const currentSettings = await getSettings('xtwitter', tenantId);
+          const oauthTokenSecret = currentSettings._pendingOAuthTokenSecret || '';
+          
+          if (!oauthTokenSecret) {
+            return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ message: 'Kein ausstehender OAuth-Request gefunden. Bitte erneut verbinden.' }) };
+          }
+          
+          const result = await exchangeOAuth1Verifier(body.oauthToken, oauthTokenSecret, body.oauthVerifier);
+          
+          await updateSettings('xtwitter', tenantId, {
+            ...currentSettings,
+            accessToken: result.accessToken,
+            accessTokenSecret: result.accessTokenSecret,
+            userId: result.userId,
+            accountName: `@${result.screenName}`,
+            enabled: true,
+            _pendingOAuthToken: '',
+            _pendingOAuthTokenSecret: '',
+          });
+          
+          return {
+            statusCode: 200,
+            headers: corsHeaders,
+            body: JSON.stringify({
+              message: 'X erfolgreich verbunden (OAuth 1.0a)!',
+              userId: result.userId,
+              username: result.screenName,
+              accountName: `@${result.screenName}`
+            })
+          };
+        }
+        
+        // OAuth 2.0 PKCE token exchange (fallback)
+        const { code, redirectUri, codeVerifier } = body;
         if (!code || !redirectUri || !codeVerifier) {
           return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ message: 'Code, Redirect URI und Code Verifier erforderlich' }) };
         }
         
         const { accessToken, refreshToken, userId: xUserId, username } = await exchangeXTwitterCode(code, redirectUri, codeVerifier, tenantId);
         
-        // Auto-save the tokens and user info to settings
         const currentSettings = await getSettings('xtwitter', tenantId);
         await updateSettings('xtwitter', tenantId, {
           ...currentSettings,

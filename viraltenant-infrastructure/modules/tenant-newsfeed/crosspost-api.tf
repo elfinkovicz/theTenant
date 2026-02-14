@@ -1112,7 +1112,6 @@ resource "aws_api_gateway_integration_response" "xtwitter_oauth_callback_cors" {
   depends_on = [aws_api_gateway_method_response.xtwitter_oauth_callback_cors, aws_api_gateway_integration.xtwitter_oauth_callback_cors]
 }
 
-
 # LINKEDIN
 resource "aws_api_gateway_resource" "linkedin" {
   rest_api_id = var.api_gateway_id
