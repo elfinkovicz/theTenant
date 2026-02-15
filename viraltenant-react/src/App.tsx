@@ -48,6 +48,7 @@ import { YouTubeCallback } from '@pages/YouTubeCallback'
 import { YouTubeOAuthCallback } from '@pages/YouTubeOAuthCallback'
 import { TikTokCallback } from '@pages/TikTokCallback'
 import { SnapchatCallback } from '@pages/SnapchatCallback'
+import { XTwitterCallback } from '@pages/XTwitterCallback'
 import { MollieCallback } from '@pages/MollieCallback'
 import { MollieConnectCallback } from '@pages/MollieConnectCallback'
 import { CustomPage } from '@pages/CustomPage'
@@ -101,6 +102,7 @@ function App() {
               <Route path="/youtube/oauth/callback" element={<YouTubeOAuthCallback />} />
               <Route path="/tiktok-callback" element={<TikTokCallback />} />
               <Route path="/snapchat-callback" element={<SnapchatCallback />} />
+              <Route path="/x-callback" element={<XTwitterCallback />} />
               <Route path="/billing/mollie-callback" element={<MollieCallback />} />
               <Route path="/mollie-callback" element={<MollieConnectCallback />} />
               <Route path="/page/:slug" element={<CustomPage />} />

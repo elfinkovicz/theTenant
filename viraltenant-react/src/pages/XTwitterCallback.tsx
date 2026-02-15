@@ -3,64 +3,50 @@ import { useSearchParams } from 'react-router-dom'
 import { Loader2, CheckCircle, XCircle } from 'lucide-react'
 import { awsConfig } from '../config/aws-config'
 import { useAuthStore } from '../store/authStore'
+import { autoChannelService } from '../services/autoChannel.service'
 
-export const SnapchatCallback = () => {
+export const XTwitterCallback = () => {
   const [searchParams] = useSearchParams()
-  const { accessToken: storedAccessToken } = useAuthStore()
+  const { accessToken } = useAuthStore()
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [error, setError] = useState('')
   const [userName, setUserName] = useState('')
 
-  const code = searchParams.get('code')
-  const state = searchParams.get('state') // Contains snapchat|tenantId|origin|base64Token
-  const errorParam = searchParams.get('error')
-  const errorDescription = searchParams.get('error_description')
-
-  // Parse state to extract tenantId and access token
-  const delimiter = state?.includes('|') ? '|' : ':'
-  const stateParts = (state || '|||').split(delimiter)
-  const tenantId = stateParts[1] || stateParts[0] // Fallback: old format was just tenantId
-  
-  let accessToken = storedAccessToken
-  if (stateParts[3]) {
-    try {
-      accessToken = atob(stateParts[3])
-    } catch {
-      accessToken = stateParts[3] || storedAccessToken
-    }
-  }
+  const oauthToken = searchParams.get('oauth_token')
+  const oauthVerifier = searchParams.get('oauth_verifier')
+  const denied = searchParams.get('denied')
 
   useEffect(() => {
-    if (errorParam) {
+    if (denied) {
       setStatus('error')
-      setError(errorDescription || 'Snapchat Autorisierung abgelehnt')
+      setError('X Autorisierung abgelehnt')
       return
     }
 
-    if (code && state) {
-      exchangeCodeForToken()
-    } else if (!code) {
+    if (oauthToken && oauthVerifier) {
+      exchangeVerifier()
+    } else {
       setStatus('error')
-      setError('Kein Autorisierungscode erhalten')
+      setError('Keine OAuth-Parameter erhalten')
     }
-  }, [code, state, errorParam])
+  }, [oauthToken, oauthVerifier, denied])
 
-  const exchangeCodeForToken = async () => {
+  const exchangeVerifier = async () => {
     setStatus('loading')
     try {
-      const response = await fetch(`${awsConfig.api.user}/snapchat/oauth/callback`, {
+      const tenantId = localStorage.getItem('resolvedTenantId') || sessionStorage.getItem('x_oauth_tenant_id') || ''
+      // Get access token from localStorage (stored by NewsfeedSettings before opening popup)
+      const storedToken = localStorage.getItem('x_oauth_access_token')
+      const tokenToUse = storedToken || accessToken
+
+      const response = await fetch(`${awsConfig.api.user}/xtwitter/oauth/callback`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-          'X-Creator-ID': tenantId || '319190e1-0791-43b0-bd04-506f959c1471'
+          'Authorization': `Bearer ${tokenToUse}`,
+          'X-Creator-ID': tenantId
         },
-        body: JSON.stringify({
-          code,
-          tenantId,
-          // Zentrale Redirect-URI über viraltenant.com (für alle Tenants)
-          redirectUri: `https://viraltenant.com/snapchat-callback`
-        })
+        body: JSON.stringify({ oauthToken, oauthVerifier })
       })
 
       const data = await response.json()
@@ -69,13 +55,27 @@ export const SnapchatCallback = () => {
         throw new Error(data.message || data.error || 'Token-Austausch fehlgeschlagen')
       }
 
-      setUserName(data.displayName || 'Snapchat User')
+      setUserName(data.accountName || data.username || 'X Account')
       setStatus('success')
-      
-      // Close popup after 1.5 seconds
-      setTimeout(() => {
-        window.close()
-      }, 1500)
+
+      // Auto-add channel
+      await autoChannelService.addOrUpdateChannel({
+        platform: 'xtwitter',
+        username: data.username,
+        accountName: data.accountName
+      })
+
+      // Notify parent window
+      if (window.opener) {
+        window.opener.postMessage({ type: 'channel-updated', platform: 'xtwitter' }, '*')
+      }
+      localStorage.setItem('channels-updated', Date.now().toString())
+
+      // Clean up
+      sessionStorage.removeItem('x_oauth_tenant_id')
+      localStorage.removeItem('x_oauth_access_token')
+
+      setTimeout(() => { window.close() }, 1500)
     } catch (err: any) {
       setStatus('error')
       setError(err.message)
@@ -85,27 +85,21 @@ export const SnapchatCallback = () => {
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-dark-900">
       <div className="bg-dark-800 rounded-2xl p-8 max-w-md w-full shadow-xl border border-dark-700 text-center">
-        
-        {/* Loading State */}
         {status === 'loading' && (
           <>
-            <Loader2 size={48} className="animate-spin text-yellow-400 mx-auto mb-4" />
+            <Loader2 size={48} className="animate-spin text-white mx-auto mb-4" />
             <h2 className="text-xl font-semibold mb-2">Verbindung wird hergestellt...</h2>
             <p className="text-dark-400">Bitte warten</p>
           </>
         )}
-
-        {/* Success State */}
         {status === 'success' && (
           <>
             <CheckCircle size={48} className="text-green-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2 text-green-400">Snapchat verbunden!</h2>
+            <h2 className="text-xl font-semibold mb-2 text-green-400">X verbunden!</h2>
             <p className="text-dark-400 mb-2">Verbunden als {userName}</p>
             <p className="text-dark-500 text-sm">Dieses Fenster schließt sich automatisch...</p>
           </>
         )}
-
-        {/* Error State */}
         {status === 'error' && (
           <>
             <XCircle size={48} className="text-red-500 mx-auto mb-4" />

@@ -56,19 +56,29 @@ const SETTINGS_TABLE = process.env.INSTAGRAM_SETTINGS_TABLE;
 // ============================================
 
 async function postToInstagram(tenantId, post, settings) {
-  // Get all media URLs
+  // Get all media URLs - prioritize imageKeys (S3 keys → CloudFront) over imageUrls
   const imageUrls = [];
-  if (post.imageUrls && post.imageUrls.length > 0) {
+  const cfDomain = process.env.CLOUDFRONT_DOMAIN;
+  
+  if (post.imageKeys && post.imageKeys.length > 0) {
+    // Best source: S3 keys resolved via CloudFront
+    imageUrls.push(...post.imageKeys.map(key => `https://${cfDomain}/${key}`));
+    console.log('Instagram: Resolved', post.imageKeys.length, 'images from imageKeys via CloudFront');
+  } else if (post.imageUrls && post.imageUrls.length > 0) {
+    // Fallback: pre-resolved URLs from frontend
     imageUrls.push(...post.imageUrls);
-  } else if (post.imageKeys && post.imageKeys.length > 0) {
-    imageUrls.push(...post.imageKeys.map(key => `https://${process.env.CLOUDFRONT_DOMAIN}/${key}`));
-  } else if (post.imageUrl) {
-    imageUrls.push(post.imageUrl);
+    console.log('Instagram: Using', post.imageUrls.length, 'pre-resolved imageUrls');
   } else if (post.imageKey) {
-    imageUrls.push(`https://${process.env.CLOUDFRONT_DOMAIN}/${post.imageKey}`);
+    // Legacy single image
+    imageUrls.push(`https://${cfDomain}/${post.imageKey}`);
+    console.log('Instagram: Using single imageKey');
+  } else if (post.imageUrl) {
+    // Legacy single URL
+    imageUrls.push(post.imageUrl);
+    console.log('Instagram: Using single imageUrl');
   }
   
-  const videoUrl = post.videoUrl || (post.videoKey ? `https://${process.env.CLOUDFRONT_DOMAIN}/${post.videoKey}` : null);
+  const videoUrl = post.videoUrl || (post.videoKey ? `https://${cfDomain}/${post.videoKey}` : null);
   
   // Build caption with tags
   let caption = `📢 ${post.title}\n\n${post.description}`;
@@ -80,8 +90,9 @@ async function postToInstagram(tenantId, post, settings) {
   }
   
   console.log('Instagram: Posting with accountId:', settings.accountId);
-  console.log('Instagram: Image URLs:', imageUrls.length);
+  console.log('Instagram: Image URLs:', imageUrls.length, '| URLs:', JSON.stringify(imageUrls).substring(0, 300));
   console.log('Instagram: Video URL:', videoUrl);
+  console.log('Instagram: Post keys - imageKey:', post.imageKey, '| imageKeys:', post.imageKeys?.length, '| imageUrls:', post.imageUrls?.length);
   
   // For Shorts or videos, upload as Reel
   if (post.isShort && videoUrl) {

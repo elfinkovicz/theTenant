@@ -32,13 +32,23 @@ export const YouTubeOAuthCallback = () => {
     setStatus('loading')
     try {
       // Parse state to get tenantId and redirectUri
-      let stateData: { tenantId?: string; redirectUri?: string } = {}
+      let stateData: { tenantId?: string; redirectUri?: string; token?: string } = {}
       try {
         const decoded = atob(decodeURIComponent(state || ''))
         stateData = JSON.parse(decoded)
       } catch (e) {
         console.log('Could not parse state as JSON, trying as plain tenantId')
         stateData = { tenantId: decodeURIComponent(state || '') }
+      }
+
+      // Extract access token from state (base64 encoded)
+      let authToken = ''
+      if (stateData.token) {
+        try {
+          authToken = atob(stateData.token)
+        } catch {
+          authToken = stateData.token
+        }
       }
 
       // Get tenantId from multiple sources
@@ -57,12 +67,20 @@ export const YouTubeOAuthCallback = () => {
 
       console.log('YouTube OAuth Callback - tenantId:', tenantId, 'redirectUri:', redirectUri)
 
-      // Exchange code for token via Lambda API (no auth required)
+      // Exchange code for token via Lambda API
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      }
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`
+      }
+      if (tenantId) {
+        headers['X-Creator-ID'] = tenantId
+      }
+      
       const response = await fetch(`${awsConfig.api.user}/youtube/oauth/callback`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers,
         body: JSON.stringify({
           code,
           redirectUri,

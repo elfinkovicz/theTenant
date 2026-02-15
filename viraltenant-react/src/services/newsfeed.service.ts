@@ -203,7 +203,7 @@ class NewsfeedService {
   }
 
   // Admin: Update newsfeed data (add/update posts)
-  async updateNewsfeed(posts: NewsfeedPost[], settings?: object, tenantId?: string): Promise<void> {
+  async updateNewsfeed(posts: NewsfeedPost[], settings?: object, tenantId?: string, options?: { skipCrossposting?: boolean }): Promise<void> {
     // Always use provided tenant ID or detect from subdomain
     const requestTenantId = tenantId || this.getTenantId();
     
@@ -211,7 +211,7 @@ class NewsfeedService {
     
     await axios.put(
       `${API_BASE_URL}/tenants/${requestTenantId}/newsfeed`,
-      { posts, settings },
+      { posts, settings, ...(options?.skipCrossposting ? { skipCrossposting: true } : {}) },
       { 
         headers: {
           ...this.getAuthHeaders(),
@@ -224,6 +224,52 @@ class NewsfeedService {
   // Admin: Update posts (legacy compatibility)
   async updatePosts(posts: NewsfeedPost[], settings?: object, tenantId?: string): Promise<void> {
     await this.updateNewsfeed(posts, settings, tenantId);
+  }
+
+  // Extract first frame from video file as JPEG thumbnail
+  private extractVideoThumbnail(videoFile: File): Promise<File | null> {
+    return new Promise((resolve) => {
+      try {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        video.muted = true;
+        video.playsInline = true;
+        
+        const objectUrl = URL.createObjectURL(videoFile);
+        video.src = objectUrl;
+        
+        const cleanup = () => URL.revokeObjectURL(objectUrl);
+        
+        video.onloadeddata = () => {
+          video.currentTime = 0.1; // Skip potential black first frame
+        };
+        
+        video.onseeked = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) { cleanup(); resolve(null); return; }
+            
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob((blob) => {
+              cleanup();
+              if (!blob) { resolve(null); return; }
+              resolve(new File([blob], `auto-thumb-${Date.now()}.jpg`, { type: 'image/jpeg' }));
+            }, 'image/jpeg', 0.85);
+          } catch {
+            cleanup();
+            resolve(null);
+          }
+        };
+        
+        video.onerror = () => { cleanup(); resolve(null); };
+        setTimeout(() => { cleanup(); resolve(null); }, 10000);
+      } catch {
+        resolve(null);
+      }
+    });
   }
 
   // Admin: Add a new post
@@ -246,6 +292,24 @@ class NewsfeedService {
       const thumbnailResponse = await this.generateUploadUrl(thumbnailFile.name, thumbnailFile.type, 'image', requestTenantId);
       await this.uploadToS3(thumbnailResponse.uploadUrl, thumbnailFile);
       imageKey = thumbnailResponse.key;
+    }
+    
+    // Auto-generate thumbnail from video if no image/thumbnail exists
+    // This ensures crosspost platforms that don't support video still get an image
+    const hasAnyImage = imageKey || data.imageKey || (data.imageKeys && data.imageKeys.length > 0);
+    if ((videoKey || data.videoKey) && !hasAnyImage && !thumbnailFile && videoFile) {
+      console.log('Auto-generating thumbnail from video (no images in post)...');
+      const autoThumb = await this.extractVideoThumbnail(videoFile);
+      if (autoThumb) {
+        try {
+          const thumbResponse = await this.generateUploadUrl(autoThumb.name, autoThumb.type, 'image', requestTenantId);
+          await this.uploadToS3(thumbResponse.uploadUrl, autoThumb);
+          imageKey = thumbResponse.key;
+          console.log('Auto-thumbnail uploaded:', thumbResponse.key);
+        } catch (err) {
+          console.error('Failed to upload auto-thumbnail:', err);
+        }
+      }
     }
     
     const newPost: NewsfeedPost = {
@@ -355,7 +419,7 @@ class NewsfeedService {
     
     // Use the resolved tenant ID from the backend response if available
     const targetTenantId = newsfeedData.resolvedTenantId || requestTenantId;
-    await this.updateNewsfeed(updatedPosts, newsfeedData.settings, targetTenantId);
+    await this.updateNewsfeed(updatedPosts, newsfeedData.settings, targetTenantId, { skipCrossposting: true });
   }
 
   // Admin: Delete asset from S3

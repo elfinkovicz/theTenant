@@ -82,19 +82,23 @@ async function handleOAuthCallback(code, redirectUri, tenantId) {
 // ============================================
 
 async function postToLinkedIn(tenantId, post, settings) {
-  // Get first image URL (LinkedIn doesn't support multi-image posts via API)
+  // Get first image URL - prioritize imageKeys (S3 keys → CloudFront) over imageUrls
+  // LinkedIn doesn't support multi-image posts via API
+  const cfDomain = process.env.CLOUDFRONT_DOMAIN;
   let imageUrl = null;
-  if (post.imageUrls && post.imageUrls.length > 0) {
+  if (post.imageKeys && post.imageKeys.length > 0) {
+    imageUrl = `https://${cfDomain}/${post.imageKeys[0]}`;
+    console.log('LinkedIn: Resolved image from imageKeys[0] via CloudFront');
+  } else if (post.imageUrls && post.imageUrls.length > 0) {
     imageUrl = post.imageUrls[0];
-  } else if (post.imageKeys && post.imageKeys.length > 0) {
-    imageUrl = `https://${process.env.CLOUDFRONT_DOMAIN}/${post.imageKeys[0]}`;
+    console.log('LinkedIn: Using pre-resolved imageUrls[0]');
+  } else if (post.imageKey) {
+    imageUrl = `https://${cfDomain}/${post.imageKey}`;
   } else if (post.imageUrl) {
     imageUrl = post.imageUrl;
-  } else if (post.imageKey) {
-    imageUrl = `https://${process.env.CLOUDFRONT_DOMAIN}/${post.imageKey}`;
   }
   
-  const videoUrl = post.videoUrl || (post.videoKey ? `https://${process.env.CLOUDFRONT_DOMAIN}/${post.videoKey}` : null);
+  const videoUrl = post.videoUrl || (post.videoKey ? `https://${cfDomain}/${post.videoKey}` : null);
   
   // Note: LinkedIn API doesn't support multi-image posts, only single image or video
   const imageCount = (post.imageUrls?.length || 0) || (post.imageKeys?.length || 0) || (post.imageUrl ? 1 : 0);

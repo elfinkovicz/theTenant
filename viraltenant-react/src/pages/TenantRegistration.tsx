@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Crown, User, Mail, Globe, AlertCircle, CheckCircle, Loader, ArrowRight, ArrowLeft, KeyRound } from 'lucide-react'
+import { User, Mail, Globe, AlertCircle, CheckCircle, Loader, ArrowRight, ArrowLeft, KeyRound } from 'lucide-react'
 import { Navigate } from 'react-router-dom'
 import { awsConfig } from '../config/aws-config'
 import { usePlatformTenant } from '../hooks/usePlatformTenant'
@@ -199,20 +199,63 @@ export function TenantRegistration() {
   )
 
   return (
-    <div className="min-h-screen py-8 px-4">
-      <div className="container mx-auto">
+    <div className="min-h-screen py-8 px-4 relative overflow-hidden">
+      {/* Blurred floating background logos - positioned across the full page */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+        {[
+          { left: '8%',  top: '10%', size: 140, blur: 2, opacity: 0.14, dx: 120, dy: 80,  startRot: 12,  rot: 15,  dur: 45 },
+          { left: '70%', top: '5%',  size: 110, blur: 3, opacity: 0.12, dx: -140, dy: 100, startRot: -18, rot: -20, dur: 50 },
+          { left: '20%', top: '65%', size: 160, blur: 4, opacity: 0.10, dx: 100, dy: -60, startRot: 8,   rot: 25,  dur: 55 },
+          { left: '80%', top: '55%', size: 120, blur: 2, opacity: 0.15, dx: -120, dy: -80, startRot: -10, rot: -15, dur: 40 },
+        ].map((logo, i) => (
+          <motion.div
+            key={i}
+            className="absolute"
+            style={{
+              left: logo.left,
+              top: logo.top,
+              filter: `blur(${logo.blur}px)`,
+              opacity: logo.opacity,
+              rotate: `${logo.startRot}deg`,
+            }}
+            animate={{
+              x: [0, logo.dx, 0],
+              y: [0, logo.dy, 0],
+              rotate: [logo.startRot, logo.startRot + logo.rot, logo.startRot],
+            }}
+            transition={{
+              duration: logo.dur,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+          >
+            <img src="/logo.png" alt="" className="object-contain" style={{ width: `${logo.size}px`, height: `${logo.size}px` }} />
+          </motion.div>
+        ))}
+      </div>
+
+      <div className="container mx-auto relative z-10">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <Crown size={40} className="text-primary-500" />
-              <h1 className="text-4xl font-bold">
-                <span className="glow-text">Neuen Tenant erstellen</span>
+          {/* Header with enhanced styling */}
+          <div className="text-center mb-12">
+            <motion.div 
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="mb-6"
+            >
+              <h1 className="text-5xl font-bold bg-gradient-to-r from-pink-400 via-purple-400 to-blue-400 bg-clip-text text-transparent">
+                Neuen Tenant erstellen
               </h1>
-            </div>
-            <p className="text-dark-400 text-lg">
-              Erstellen Sie Ihren eigenen Creator-Bereich mit eigener Subdomain
-            </p>
+            </motion.div>
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="text-dark-300 text-lg max-w-xl mx-auto"
+            >
+              Erstellen Sie Ihren eigenen Creator-Bereich mit eigener Subdomain und voller Kontrolle über Ihre Community
+            </motion.p>
           </div>
 
           <StepIndicator />
@@ -229,7 +272,7 @@ export function TenantRegistration() {
 
           {/* Step 1: Form */}
           {step === 'form' && (
-            <div className="card">
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card border-primary-500/20 shadow-lg shadow-primary-500/10">
               <form onSubmit={handleSendCode} className="space-y-6">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -282,23 +325,28 @@ export function TenantRegistration() {
                   {errors.subdomain && <p className="text-red-400 text-sm mt-1">{errors.subdomain}</p>}
                 </div>
 
-                <button type="submit" disabled={isSubmitting} className="btn-primary w-full flex items-center justify-center gap-2">
-                  {isSubmitting ? <><Loader className="w-4 h-4 animate-spin" />Sende Code...</> : <><ArrowRight className="w-4 h-4" />Weiter zur Verifizierung</>}
+                <button type="submit" disabled={isSubmitting} className="btn-primary w-full flex items-center justify-center gap-2 text-lg py-3 hover:shadow-lg hover:shadow-primary-500/30 transition-all">
+                  {isSubmitting ? <><Loader className="w-5 h-5 animate-spin" />Sende Code...</> : <><ArrowRight className="w-5 h-5" />Weiter zur Verifizierung</>}
                 </button>
               </form>
-            </div>
+            </motion.div>
           )}
 
           {/* Step 2: Verification */}
           {step === 'verify' && (
-            <div className="card">
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card border-primary-500/20 shadow-lg shadow-primary-500/10">
               <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-primary-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <motion.div 
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.2 }}
+                  className="w-16 h-16 bg-primary-500/20 rounded-full flex items-center justify-center mx-auto mb-4"
+                >
                   <KeyRound className="w-8 h-8 text-primary-400" />
-                </div>
+                </motion.div>
                 <h2 className="text-2xl font-bold mb-2">E-Mail verifizieren</h2>
                 <p className="text-dark-400">
-                  Wir haben einen 6-stelligen Code an <span className="text-primary-400">{formData.creatorEmail}</span> gesendet.
+                  Wir haben einen 6-stelligen Code an <span className="text-primary-400 font-medium">{formData.creatorEmail}</span> gesendet.
                 </p>
               </div>
 
@@ -327,19 +375,37 @@ export function TenantRegistration() {
                   </button>
                 </div>
               </form>
-            </div>
+            </motion.div>
           )}
 
           {/* Step 3: Success */}
           {step === 'success' && successData && (
-            <div className="card text-center">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="card border-green-500/20 shadow-lg shadow-green-500/10 text-center">
               <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-                <CheckCircle className="w-10 h-10 text-green-400" />
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.3 }}
+                >
+                  <CheckCircle className="w-10 h-10 text-green-400" />
+                </motion.div>
               </div>
-              <h2 className="text-3xl font-bold mb-4 text-green-400">Tenant erfolgreich erstellt!</h2>
-              <p className="text-dark-400 mb-6">
-                Ihre Zugangsdaten wurden an <span className="text-primary-400">{formData.creatorEmail}</span> gesendet.
-              </p>
+              <motion.h2 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.4 }}
+                className="text-4xl font-bold mb-4 bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent"
+              >
+                Tenant erfolgreich erstellt!
+              </motion.h2>
+              <motion.p 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.5 }}
+                className="text-dark-300 mb-8 text-lg"
+              >
+                Ihre Zugangsdaten wurden an <span className="text-primary-400 font-medium">{formData.creatorEmail}</span> gesendet.
+              </motion.p>
 
               <div className="bg-dark-800 rounded-lg p-6 mb-6 text-left">
                 <h3 className="font-semibold text-primary-300 mb-4">Ihre Tenant-Informationen</h3>
@@ -364,10 +430,10 @@ export function TenantRegistration() {
               </div>
 
               <a href={`${successData.url}/login`} target="_blank" rel="noopener noreferrer"
-                className="btn-primary inline-flex items-center gap-2">
-                <ArrowRight className="w-4 h-4" />Zum Login
+                className="btn-primary inline-flex items-center gap-2 text-lg px-8 py-3 hover:shadow-lg hover:shadow-primary-500/30 transition-all">
+                <ArrowRight className="w-5 h-5" />Zum Login
               </a>
-            </div>
+            </motion.div>
           )}
         </motion.div>
       </div>

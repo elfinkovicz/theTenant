@@ -205,6 +205,29 @@ function buildPostText(post, maxLength = 300) {
   return text;
 }
 
+// Resolve all image URLs from post - prioritize imageKeys (S3 keys → CloudFront) over imageUrls
+function resolveImageUrls(post) {
+  const urls = [];
+  const cfDomain = process.env.CLOUDFRONT_DOMAIN;
+  
+  if (post.imageKeys && post.imageKeys.length > 0) {
+    // Best source: S3 keys resolved via CloudFront
+    urls.push(...post.imageKeys.map(k => `https://${cfDomain}/${k}`));
+    console.log('Bluesky: Resolved', post.imageKeys.length, 'images from imageKeys via CloudFront');
+  } else if (post.imageUrls && post.imageUrls.length > 0) {
+    // Fallback: pre-resolved URLs
+    urls.push(...post.imageUrls);
+    console.log('Bluesky: Using', post.imageUrls.length, 'pre-resolved imageUrls');
+  } else if (post.imageKey) {
+    urls.push(`https://${cfDomain}/${post.imageKey}`);
+    console.log('Bluesky: Using single imageKey');
+  } else if (post.imageUrl) {
+    urls.push(post.imageUrl);
+    console.log('Bluesky: Using single imageUrl');
+  }
+  return urls;
+}
+
 exports.handler = async (event) => {
   console.log('Bluesky crosspost received:', JSON.stringify(event));
   
@@ -229,16 +252,17 @@ exports.handler = async (event) => {
     // Build post text
     const text = buildPostText(post);
     
-    // Prepare embed (video, image, or external link) - prioritize video
+    // Resolve all media URLs
+    const imageUrls = resolveImageUrls(post);
+    const videoUrl = post.videoUrl || (post.videoKey ? `https://${process.env.CLOUDFRONT_DOMAIN}/${post.videoKey}` : null);
+    
+    console.log('Bluesky: imageUrls:', imageUrls.length, '| videoUrl:', !!videoUrl);
+    
+    // Prepare embed
     let embed = null;
     
-    // Get video URL
-    const videoUrl = post.videoUrl || (post.videoKey ? `https://${process.env.CLOUDFRONT_DOMAIN}/${post.videoKey}` : null);
-    // Get image URL (thumbnail for shorts, or regular image)
-    const imageUrl = post.imageUrl || (post.imageKey ? `https://${process.env.CLOUDFRONT_DOMAIN}/${post.imageKey}` : null);
-    
-    // Try video first (16:9 or 9:16)
     if (videoUrl) {
+      // Try video upload first
       console.log('Uploading video to Bluesky...');
       const blobResult = await uploadBlob(session, videoUrl, true);
       
@@ -249,44 +273,45 @@ exports.handler = async (event) => {
           alt: post.title
         };
         console.log('Video uploaded successfully');
-      } else if (imageUrl) {
-        // Fallback to thumbnail if video upload fails
-        console.log('Video upload failed, falling back to thumbnail...');
-        const imgResult = await uploadBlob(session, imageUrl, false);
-        if (imgResult && imgResult.blob) {
-          embed = {
-            $type: 'app.bsky.embed.images',
-            images: [{
-              alt: post.title,
-              image: imgResult.blob
-            }]
-          };
-          console.log('Thumbnail uploaded as fallback');
+        // Note: Bluesky video embed doesn't support additional images alongside
+      } else {
+        // Video upload failed - fall back to images (thumbnails)
+        console.log('Video upload failed, falling back to images...');
+        const images = [];
+        for (let i = 0; i < Math.min(imageUrls.length, 4); i++) {
+          const imgResult = await uploadBlob(session, imageUrls[i], false);
+          if (imgResult && imgResult.blob) {
+            images.push({ alt: post.title || `Image ${i + 1}`, image: imgResult.blob });
+          }
+        }
+        if (images.length > 0) {
+          embed = { $type: 'app.bsky.embed.images', images };
+          console.log(`Uploaded ${images.length} fallback images`);
         }
       }
-    } else if (imageUrl) {
-      // Upload image
-      console.log('Uploading image to Bluesky...');
-      const blobResult = await uploadBlob(session, imageUrl, false);
+    } else if (imageUrls.length > 0) {
+      // Upload multiple images (Bluesky supports up to 4 images per post)
+      const images = [];
+      for (let i = 0; i < Math.min(imageUrls.length, 4); i++) {
+        console.log(`Uploading image ${i + 1}/${Math.min(imageUrls.length, 4)} to Bluesky...`);
+        const blobResult = await uploadBlob(session, imageUrls[i], false);
+        
+        if (blobResult && blobResult.blob) {
+          images.push({ alt: post.title || `Image ${i + 1}`, image: blobResult.blob });
+          console.log(`Image ${i + 1} uploaded successfully`);
+        }
+      }
       
-      if (blobResult && blobResult.blob) {
-        embed = {
-          $type: 'app.bsky.embed.images',
-          images: [{
-            alt: post.title,
-            image: blobResult.blob
-          }]
-        };
-        console.log('Image uploaded successfully');
+      if (images.length > 0) {
+        embed = { $type: 'app.bsky.embed.images', images };
       }
     } else if (post.externalLink) {
-      // Create external link embed
       embed = {
         $type: 'app.bsky.embed.external',
         external: {
           uri: post.externalLink,
           title: post.title,
-          description: post.description.substring(0, 200)
+          description: (post.description || '').substring(0, 200)
         }
       };
     }
@@ -300,7 +325,8 @@ exports.handler = async (event) => {
       statusCode: 200,
       success: true,
       uri: result.uri,
-      cid: result.cid
+      cid: result.cid,
+      imageCount: imageUrls.length
     };
     
   } catch (error) {

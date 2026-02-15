@@ -45,7 +45,7 @@ const CHANNELS = {
   xtwitter: {
     settingsTable: process.env.XTWITTER_SETTINGS_TABLE,
     lambdaName: process.env.LAMBDA_XTWITTER,
-    checkEnabled: (s) => s.enabled && (s.oauth2AccessToken || (s.apiKey && s.accessToken))
+    checkEnabled: (s) => s.enabled && (s.oauth2AccessToken || (s.accessToken && s.accessTokenSecret))
   },
   linkedin: {
     settingsTable: process.env.LINKEDIN_SETTINGS_TABLE,
@@ -83,7 +83,7 @@ const CHANNELS = {
   snapchat: {
     settingsTable: process.env.SNAPCHAT_SETTINGS_TABLE,
     lambdaName: process.env.LAMBDA_SNAPCHAT,
-    checkEnabled: (s) => s.enabled && s.accessToken && s.organizationId,
+    checkEnabled: (s) => s.enabled && s.accessToken,
     filter: (post) => post.videoKey || post.imageKey // Snapchat needs media
   },
   threads: {
@@ -204,7 +204,7 @@ exports.handler = async (event) => {
     }
     
     if (!config.checkEnabled(settings)) {
-      console.log(`${channel}: Not enabled or missing required fields`);
+      console.log(`${channel}: Not enabled or missing required fields. enabled=${settings.enabled}, keys=[${Object.keys(settings).filter(k => k !== 'tenant_id' && k !== 'updated_at' && settings[k]).join(',')}]`);
       continue;
     }
     

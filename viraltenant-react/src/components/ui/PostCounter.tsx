@@ -16,6 +16,7 @@ const PLATFORM_LIMITS: Record<string, { limit: number; label: string }> = {
   discord:   { limit: 15,   label: 'Discord erlaubt max. 15 Nachrichten pro Tag' },
   slack:     { limit: 15,   label: 'Slack erlaubt max. 15 Nachrichten pro Tag' },
   whatsapp:  { limit: 15,   label: 'WhatsApp erlaubt max. 15 Nachrichten pro Tag' },
+  signal:    { limit: 15,   label: 'Signal erlaubt max. 15 Nachrichten pro Tag' },
 }
 
 interface PostCounterProps {

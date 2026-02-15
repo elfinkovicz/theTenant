@@ -81,19 +81,22 @@ async function handleOAuthCallback(code, redirectUri, tenantId) {
 // ============================================
 
 async function postToFacebook(tenantId, post, settings) {
-  // Get all media URLs
+  // Get all media URLs - prioritize imageKeys (S3 keys → CloudFront) over imageUrls
+  const cfDomain = process.env.CLOUDFRONT_DOMAIN;
   const imageUrls = [];
-  if (post.imageUrls && post.imageUrls.length > 0) {
+  if (post.imageKeys && post.imageKeys.length > 0) {
+    imageUrls.push(...post.imageKeys.map(key => `https://${cfDomain}/${key}`));
+    console.log('Facebook: Resolved', post.imageKeys.length, 'images from imageKeys via CloudFront');
+  } else if (post.imageUrls && post.imageUrls.length > 0) {
     imageUrls.push(...post.imageUrls);
-  } else if (post.imageKeys && post.imageKeys.length > 0) {
-    imageUrls.push(...post.imageKeys.map(key => `https://${process.env.CLOUDFRONT_DOMAIN}/${key}`));
+    console.log('Facebook: Using', post.imageUrls.length, 'pre-resolved imageUrls');
+  } else if (post.imageKey) {
+    imageUrls.push(`https://${cfDomain}/${post.imageKey}`);
   } else if (post.imageUrl) {
     imageUrls.push(post.imageUrl);
-  } else if (post.imageKey) {
-    imageUrls.push(`https://${process.env.CLOUDFRONT_DOMAIN}/${post.imageKey}`);
   }
   
-  const videoUrl = post.videoUrl || (post.videoKey ? `https://${process.env.CLOUDFRONT_DOMAIN}/${post.videoKey}` : null);
+  const videoUrl = post.videoUrl || (post.videoKey ? `https://${cfDomain}/${post.videoKey}` : null);
   
   // Build message with tags
   let message = `📢 ${post.title}\n\n${post.description}`;

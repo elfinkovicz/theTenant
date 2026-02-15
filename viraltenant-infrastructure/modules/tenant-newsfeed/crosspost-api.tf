@@ -1112,6 +1112,70 @@ resource "aws_api_gateway_integration_response" "xtwitter_oauth_callback_cors" {
   depends_on = [aws_api_gateway_method_response.xtwitter_oauth_callback_cors, aws_api_gateway_integration.xtwitter_oauth_callback_cors]
 }
 
+# X Twitter OAuth Disconnect
+resource "aws_api_gateway_resource" "xtwitter_oauth_disconnect" {
+  rest_api_id = var.api_gateway_id
+  parent_id   = aws_api_gateway_resource.xtwitter_oauth.id
+  path_part   = "disconnect"
+}
+
+resource "aws_api_gateway_method" "delete_xtwitter_oauth_disconnect" {
+  rest_api_id   = var.api_gateway_id
+  resource_id   = aws_api_gateway_resource.xtwitter_oauth_disconnect.id
+  http_method   = "DELETE"
+  authorization = "CUSTOM"
+  authorizer_id = var.lambda_authorizer_id
+}
+
+resource "aws_api_gateway_integration" "delete_xtwitter_oauth_disconnect" {
+  rest_api_id             = var.api_gateway_id
+  resource_id             = aws_api_gateway_resource.xtwitter_oauth_disconnect.id
+  http_method             = aws_api_gateway_method.delete_xtwitter_oauth_disconnect.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.crosspost_settings.invoke_arn
+}
+
+resource "aws_api_gateway_method" "xtwitter_oauth_disconnect_cors" {
+  rest_api_id   = var.api_gateway_id
+  resource_id   = aws_api_gateway_resource.xtwitter_oauth_disconnect.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "xtwitter_oauth_disconnect_cors" {
+  rest_api_id       = var.api_gateway_id
+  resource_id       = aws_api_gateway_resource.xtwitter_oauth_disconnect.id
+  http_method       = aws_api_gateway_method.xtwitter_oauth_disconnect_cors.http_method
+  type              = "MOCK"
+  request_templates = { "application/json" = jsonencode({ statusCode = 200 }) }
+}
+
+resource "aws_api_gateway_method_response" "xtwitter_oauth_disconnect_cors" {
+  rest_api_id = var.api_gateway_id
+  resource_id = aws_api_gateway_resource.xtwitter_oauth_disconnect.id
+  http_method = aws_api_gateway_method.xtwitter_oauth_disconnect_cors.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "xtwitter_oauth_disconnect_cors" {
+  rest_api_id = var.api_gateway_id
+  resource_id = aws_api_gateway_resource.xtwitter_oauth_disconnect.id
+  http_method = aws_api_gateway_method.xtwitter_oauth_disconnect_cors.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization,X-Creator-ID'"
+    "method.response.header.Access-Control-Allow-Methods" = "'DELETE,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+  depends_on = [aws_api_gateway_method_response.xtwitter_oauth_disconnect_cors, aws_api_gateway_integration.xtwitter_oauth_disconnect_cors]
+}
+
 # LINKEDIN
 resource "aws_api_gateway_resource" "linkedin" {
   rest_api_id = var.api_gateway_id

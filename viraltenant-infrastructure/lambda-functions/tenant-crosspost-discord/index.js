@@ -19,9 +19,34 @@ const SETTINGS_TABLE = process.env.DISCORD_SETTINGS_TABLE;
 // POSTING FUNCTIONS
 // ============================================
 
+// Resolve all image URLs from post - prioritize imageKeys (S3 keys → CloudFront) over imageUrls
+function resolveImageUrls(post) {
+  const urls = [];
+  const cfDomain = process.env.CLOUDFRONT_DOMAIN;
+  
+  if (post.imageKeys && post.imageKeys.length > 0) {
+    // Best source: S3 keys resolved via CloudFront
+    urls.push(...post.imageKeys.map(k => `https://${cfDomain}/${k}`));
+    console.log('Discord: Resolved', post.imageKeys.length, 'images from imageKeys via CloudFront');
+  } else if (post.imageUrls && post.imageUrls.length > 0) {
+    // Fallback: pre-resolved URLs
+    urls.push(...post.imageUrls);
+    console.log('Discord: Using', post.imageUrls.length, 'pre-resolved imageUrls');
+  } else if (post.imageKey) {
+    urls.push(`https://${cfDomain}/${post.imageKey}`);
+    console.log('Discord: Using single imageKey');
+  } else if (post.imageUrl) {
+    urls.push(post.imageUrl);
+    console.log('Discord: Using single imageUrl');
+  }
+  return urls;
+}
+
 async function postToDiscord(tenantId, post, settings) {
-  const imageUrl = post.imageUrl || (post.imageKey ? `https://${process.env.CLOUDFRONT_DOMAIN}/${post.imageKey}` : null);
+  const imageUrls = resolveImageUrls(post);
   const videoUrl = post.videoUrl || (post.videoKey ? `https://${process.env.CLOUDFRONT_DOMAIN}/${post.videoKey}` : null);
+  
+  console.log('Discord post - imageUrls:', imageUrls.length, '| videoUrl:', !!videoUrl);
   
   // Build description with tags for Shorts
   let description = post.description;
@@ -32,7 +57,7 @@ async function postToDiscord(tenantId, post, settings) {
   const embed = {
     title: post.title,
     description: description,
-    color: post.isShort ? 0xFF0080 : 0x5865F2, // Pink for Shorts, Discord blurple for regular
+    color: post.isShort ? 0xFF0080 : 0x5865F2,
     timestamp: new Date().toISOString(),
     fields: []
   };
@@ -46,13 +71,16 @@ async function postToDiscord(tenantId, post, settings) {
   
   // If video exists, upload as attachment via multipart/form-data
   if (videoUrl) {
-    // Download video from CloudFront
     const videoResponse = await fetch(videoUrl);
     if (!videoResponse.ok) {
-      // Fallback to thumbnail if video download fails
-      console.log(`Discord: Video download failed (${videoResponse.status}), falling back to thumbnail`);
-      if (imageUrl) {
-        embed.image = { url: imageUrl };
+      console.log(`Discord: Video download failed (${videoResponse.status}), falling back to images`);
+      if (imageUrls.length > 0) {
+        // Use multiple embeds for multiple images (Discord supports up to 10 embeds)
+        const embeds = [embed];
+        embeds[0].image = { url: imageUrls[0] };
+        for (let i = 1; i < Math.min(imageUrls.length, 10); i++) {
+          embeds.push({ url: embed.url, image: { url: imageUrls[i] } });
+        }
         embed.fields.push({ name: '🎬 Video', value: `[Video ansehen](${videoUrl})`, inline: false });
         
         const response = await fetch(settings.webhookUrl, {
@@ -60,7 +88,7 @@ async function postToDiscord(tenantId, post, settings) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             content: post.isShort ? '📱 Neuer Short!' : '📢 Neuer Beitrag!',
-            embeds: [embed]
+            embeds
           })
         });
         
@@ -68,7 +96,7 @@ async function postToDiscord(tenantId, post, settings) {
           const error = await response.text();
           throw new Error(`Discord post failed: ${response.status} - ${error}`);
         }
-        return { success: true, note: 'Video download failed, posted thumbnail with link' };
+        return { success: true, note: 'Video download failed, posted images with link' };
       }
       throw new Error(`Failed to download video: ${videoResponse.status}`);
     }
@@ -78,10 +106,9 @@ async function postToDiscord(tenantId, post, settings) {
     
     // Discord limit is 25MB for regular webhooks
     if (videoSizeMB > 25) {
-      // Fallback to link if video too large
       embed.fields.push({ name: '🎬 Video', value: `[Video ansehen](${videoUrl})`, inline: false });
-      if (imageUrl) {
-        embed.image = { url: imageUrl };
+      if (imageUrls.length > 0) {
+        embed.image = { url: imageUrls[0] };
       }
       
       const response = await fetch(settings.webhookUrl, {
@@ -100,46 +127,65 @@ async function postToDiscord(tenantId, post, settings) {
       return { success: true, note: 'Video too large, posted as link' };
     }
     
-    // Build multipart form data manually
+    // Build multipart form data with video + images
     const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
     const videoFilename = videoUrl.split('/').pop() || 'video.mp4';
+    const attachments = [{ id: 0, filename: videoFilename }];
     
-    // Payload JSON with attachment reference
+    // Also attach images alongside video (Discord supports multiple file attachments)
+    const imageBuffers = [];
+    for (let i = 0; i < Math.min(imageUrls.length, 9); i++) {
+      try {
+        const imgResp = await fetch(imageUrls[i]);
+        if (imgResp.ok) {
+          const imgBuf = Buffer.from(await imgResp.arrayBuffer());
+          if (imgBuf.length / (1024 * 1024) <= 25) {
+            imageBuffers.push({ buffer: imgBuf, filename: `image${i}.jpg` });
+            attachments.push({ id: i + 1, filename: `image${i}.jpg` });
+          }
+        }
+      } catch (e) { console.log(`Discord: Failed to download image ${i}:`, e.message); }
+    }
+    
     const payloadJson = JSON.stringify({
       content: post.isShort ? '📱 Neuer Short!' : '📢 Neuer Beitrag!',
       embeds: [embed],
-      attachments: [{ id: 0, filename: videoFilename }]
+      attachments
     });
     
-    // Build multipart body
-    let body = '';
-    body += `--${boundary}\r\n`;
-    body += 'Content-Disposition: form-data; name="payload_json"\r\n';
-    body += 'Content-Type: application/json\r\n\r\n';
-    body += payloadJson + '\r\n';
+    // Build multipart body parts
+    const parts = [];
     
-    // Convert string part to buffer
-    const stringPart = Buffer.from(body, 'utf-8');
-    
-    // File part header
-    const fileHeader = Buffer.from(
-      `--${boundary}\r\n` +
-      `Content-Disposition: form-data; name="files[0]"; filename="${videoFilename}"\r\n` +
-      'Content-Type: video/mp4\r\n\r\n',
+    // Payload JSON part
+    parts.push(Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="payload_json"\r\nContent-Type: application/json\r\n\r\n${payloadJson}\r\n`,
       'utf-8'
-    );
+    ));
     
-    // File part footer
-    const fileFooter = Buffer.from(`\r\n--${boundary}--\r\n`, 'utf-8');
+    // Video file part
+    parts.push(Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="files[0]"; filename="${videoFilename}"\r\nContent-Type: video/mp4\r\n\r\n`,
+      'utf-8'
+    ));
+    parts.push(videoBuffer);
+    parts.push(Buffer.from('\r\n', 'utf-8'));
     
-    // Combine all parts
-    const fullBody = Buffer.concat([stringPart, fileHeader, videoBuffer, fileFooter]);
+    // Image file parts
+    for (let i = 0; i < imageBuffers.length; i++) {
+      parts.push(Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="files[${i + 1}]"; filename="${imageBuffers[i].filename}"\r\nContent-Type: image/jpeg\r\n\r\n`,
+        'utf-8'
+      ));
+      parts.push(imageBuffers[i].buffer);
+      parts.push(Buffer.from('\r\n', 'utf-8'));
+    }
+    
+    parts.push(Buffer.from(`--${boundary}--\r\n`, 'utf-8'));
+    const fullBody = Buffer.concat(parts);
     
     const response = await fetch(settings.webhookUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': `multipart/form-data; boundary=${boundary}`
-      },
+      headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
       body: fullBody
     });
     
@@ -148,12 +194,39 @@ async function postToDiscord(tenantId, post, settings) {
       throw new Error(`Discord post failed: ${response.status} - ${error}`);
     }
     
-    return { success: true };
+    return { success: true, imageCount: imageBuffers.length, hasVideo: true };
   }
   
-  // No video - just post with image if available
-  if (imageUrl) {
-    embed.image = { url: imageUrl };
+  // No video - post with multiple images
+  if (imageUrls.length > 1) {
+    // Discord supports up to 10 embeds per message, each with an image
+    // Use same URL trick: all embeds share the same url so images display together
+    const dummyUrl = `https://viraltenant.com/post/${post.postId || Date.now()}`;
+    const embeds = [{ ...embed, url: dummyUrl, image: { url: imageUrls[0] } }];
+    for (let i = 1; i < Math.min(imageUrls.length, 10); i++) {
+      embeds.push({ url: dummyUrl, image: { url: imageUrls[i] } });
+    }
+    
+    const response = await fetch(settings.webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        content: post.isShort ? '📱 Neuer Short!' : '📢 Neuer Beitrag!',
+        embeds
+      })
+    });
+    
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Discord post failed: ${response.status} - ${error}`);
+    }
+    
+    return { success: true, imageCount: Math.min(imageUrls.length, 10) };
+  }
+  
+  // Single image or no image
+  if (imageUrls.length === 1) {
+    embed.image = { url: imageUrls[0] };
   }
   
   const response = await fetch(settings.webhookUrl, {

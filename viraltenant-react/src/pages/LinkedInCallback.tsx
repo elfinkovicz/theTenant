@@ -7,13 +7,27 @@ import { autoChannelService } from '../services/autoChannel.service'
 
 export const LinkedInCallback = () => {
   const [searchParams] = useSearchParams()
-  const { accessToken } = useAuthStore()
+  const { accessToken: storedAccessToken } = useAuthStore()
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [error, setError] = useState('')
 
   const code = searchParams.get('code')
-  const state = searchParams.get('state') // Contains tenantId
+  const state = searchParams.get('state') // Contains platform|tenantId|origin|base64Token
   const errorParam = searchParams.get('error')
+
+  // Parse state to extract tenantId and access token
+  const delimiter = state?.includes('|') ? '|' : ':'
+  const stateParts = (state || '|||').split(delimiter)
+  const tenantId = stateParts[1] || stateParts[0] // Fallback: old format was just tenantId
+  
+  let accessToken = storedAccessToken
+  if (stateParts[3]) {
+    try {
+      accessToken = atob(stateParts[3])
+    } catch {
+      accessToken = stateParts[3] || storedAccessToken
+    }
+  }
 
   useEffect(() => {
     if (errorParam) {
@@ -38,11 +52,11 @@ export const LinkedInCallback = () => {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${accessToken}`,
-          'X-Creator-ID': state || '319190e1-0791-43b0-bd04-506f959c1471'
+          'X-Creator-ID': tenantId || '319190e1-0791-43b0-bd04-506f959c1471'
         },
         body: JSON.stringify({
           code,
-          tenantId: state,
+          tenantId,
           // Zentrale Redirect-URI über viraltenant.com (für alle Tenants)
           redirectUri: `https://viraltenant.com/linkedin-callback`
         })

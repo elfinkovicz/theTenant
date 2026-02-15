@@ -216,6 +216,29 @@ function normalizeInstanceUrl(url) {
   return normalized;
 }
 
+// Resolve all image URLs from post - prioritize imageKeys (S3 keys → CloudFront) over imageUrls
+function resolveImageUrls(post) {
+  const urls = [];
+  const cfDomain = process.env.CLOUDFRONT_DOMAIN;
+  
+  if (post.imageKeys && post.imageKeys.length > 0) {
+    // Best source: S3 keys resolved via CloudFront
+    urls.push(...post.imageKeys.map(k => `https://${cfDomain}/${k}`));
+    console.log('Mastodon: Resolved', post.imageKeys.length, 'images from imageKeys via CloudFront');
+  } else if (post.imageUrls && post.imageUrls.length > 0) {
+    // Fallback: pre-resolved URLs
+    urls.push(...post.imageUrls);
+    console.log('Mastodon: Using', post.imageUrls.length, 'pre-resolved imageUrls');
+  } else if (post.imageKey) {
+    urls.push(`https://${cfDomain}/${post.imageKey}`);
+    console.log('Mastodon: Using single imageKey');
+  } else if (post.imageUrl) {
+    urls.push(post.imageUrl);
+    console.log('Mastodon: Using single imageUrl');
+  }
+  return urls;
+}
+
 exports.handler = async (event) => {
   console.log('Mastodon crosspost received:', JSON.stringify(event));
   
@@ -238,49 +261,65 @@ exports.handler = async (event) => {
     // Build post text
     const text = buildPostText(post);
     
-    // Upload media if available - prioritize video over image
+    // Resolve all media URLs
+    const imageUrls = resolveImageUrls(post);
+    const videoUrl = post.videoUrl || (post.videoKey ? `https://${process.env.CLOUDFRONT_DOMAIN}/${post.videoKey}` : null);
+    
+    console.log('Mastodon: imageUrls:', imageUrls.length, '| videoUrl:', !!videoUrl);
+    
+    // Upload media - Mastodon supports up to 4 media attachments
     const mediaIds = [];
     
-    // Get video URL
-    const videoUrl = post.videoUrl || (post.videoKey ? `https://${process.env.CLOUDFRONT_DOMAIN}/${post.videoKey}` : null);
-    // Get image URL (thumbnail for shorts, or regular image)
-    const imageUrl = post.imageUrl || (post.imageKey ? `https://${process.env.CLOUDFRONT_DOMAIN}/${post.imageKey}` : null);
-    
-    // Try video first (16:9 or 9:16)
     if (videoUrl) {
+      // Upload video
       console.log('Uploading video to Mastodon...');
       const media = await uploadMedia(instanceUrl, settings.accessToken, videoUrl, post.title, true);
       
       if (media && media.id) {
         mediaIds.push(media.id);
         console.log('Video uploaded, media ID:', media.id);
-      } else if (imageUrl) {
-        // Fallback to thumbnail if video upload fails
-        console.log('Video upload failed, falling back to thumbnail...');
-        const imgMedia = await uploadMedia(instanceUrl, settings.accessToken, imageUrl, post.title, false);
-        if (imgMedia && imgMedia.id) {
-          mediaIds.push(imgMedia.id);
-          console.log('Thumbnail uploaded, media ID:', imgMedia.id);
+        
+        // Also upload images alongside video (up to 3 more, Mastodon allows mixed media)
+        // Note: Some Mastodon instances don't allow mixing video + images
+        // If video is present, also add images as separate attachments
+        for (let i = 0; i < Math.min(imageUrls.length, 3); i++) {
+          const imgMedia = await uploadMedia(instanceUrl, settings.accessToken, imageUrls[i], post.title, false);
+          if (imgMedia && imgMedia.id) {
+            mediaIds.push(imgMedia.id);
+            console.log(`Image ${i + 1} uploaded alongside video, media ID:`, imgMedia.id);
+          }
+        }
+      } else {
+        // Video upload failed - fall back to images (use thumbnail as first image)
+        console.log('Video upload failed, falling back to images...');
+        for (let i = 0; i < Math.min(imageUrls.length, 4); i++) {
+          const imgMedia = await uploadMedia(instanceUrl, settings.accessToken, imageUrls[i], post.title, false);
+          if (imgMedia && imgMedia.id) {
+            mediaIds.push(imgMedia.id);
+            console.log(`Fallback image ${i + 1} uploaded, media ID:`, imgMedia.id);
+          }
         }
       }
-    } else if (imageUrl) {
-      console.log('Uploading image to Mastodon...');
-      const media = await uploadMedia(instanceUrl, settings.accessToken, imageUrl, post.title, false);
-      
-      if (media && media.id) {
-        mediaIds.push(media.id);
-        console.log('Image uploaded, media ID:', media.id);
+    } else if (imageUrls.length > 0) {
+      // Upload multiple images (max 4 for Mastodon)
+      for (let i = 0; i < Math.min(imageUrls.length, 4); i++) {
+        console.log(`Uploading image ${i + 1}/${Math.min(imageUrls.length, 4)} to Mastodon...`);
+        const media = await uploadMedia(instanceUrl, settings.accessToken, imageUrls[i], post.title, false);
         
-        // Wait for media processing if needed
-        if (media.url === null) {
-          console.log('Waiting for media processing...');
-          await new Promise(resolve => setTimeout(resolve, 2000));
+        if (media && media.id) {
+          mediaIds.push(media.id);
+          console.log(`Image ${i + 1} uploaded, media ID:`, media.id);
+          
+          // Wait for media processing if needed
+          if (media.url === null) {
+            console.log('Waiting for media processing...');
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
         }
       }
     }
     
-    // Create the status
-    console.log('Creating Mastodon status...');
+    console.log('Creating Mastodon status with', mediaIds.length, 'media attachments...');
     const visibility = settings.visibility || 'public';
     const result = await createStatus(instanceUrl, settings.accessToken, text, mediaIds, visibility);
     console.log('Mastodon status created:', result.id);
@@ -289,7 +328,8 @@ exports.handler = async (event) => {
       statusCode: 200,
       success: true,
       statusId: result.id,
-      url: result.url
+      url: result.url,
+      imageCount: mediaIds.length
     };
     
   } catch (error) {

@@ -497,38 +497,41 @@ async function postTweet(tenantId, post, settings) {
     tweetText = tweetText.substring(0, 277) + '...';
   }
   
-  // Get first image (X/Twitter Free tier only supports 1 image per tweet)
-  let imageKey = null;
-  let imageUrl = null;
-  if (post.imageKeys && post.imageKeys.length > 0) {
-    imageKey = post.imageKeys[0];
-    imageUrl = post.imageUrls?.[0] || `https://${process.env.CLOUDFRONT_DOMAIN}/${imageKey}`;
-  } else if (post.imageKey) {
-    imageKey = post.imageKey;
-    imageUrl = post.imageUrl || `https://${process.env.CLOUDFRONT_DOMAIN}/${imageKey}`;
-  } else if (post.imageUrl) {
-    imageUrl = post.imageUrl;
-  }
+  // Resolve all image URLs - prioritize imageKeys (S3 keys → CloudFront) over imageUrls
+  const cfDomain = process.env.CLOUDFRONT_DOMAIN;
+  const allImageKeys = [];
+  const allImageUrls = [];
   
-  const imageCount = (post.imageUrls?.length || 0) || (post.imageKeys?.length || 0) || (post.imageUrl ? 1 : 0);
-  if (imageCount > 1) {
-    console.log(`X: Note - Only posting first image (${imageCount} images in post, X Free tier limitation)`);
+  if (post.imageKeys && post.imageKeys.length > 0) {
+    allImageKeys.push(...post.imageKeys);
+    allImageUrls.push(...post.imageKeys.map(k => `https://${cfDomain}/${k}`));
+    console.log('X: Resolved', post.imageKeys.length, 'images from imageKeys via CloudFront');
+  } else if (post.imageUrls && post.imageUrls.length > 0) {
+    allImageUrls.push(...post.imageUrls);
+    console.log('X: Using', post.imageUrls.length, 'pre-resolved imageUrls');
+  } else if (post.imageKey) {
+    allImageKeys.push(post.imageKey);
+    allImageUrls.push(`https://${cfDomain}/${post.imageKey}`);
+    console.log('X: Using single imageKey');
+  } else if (post.imageUrl) {
+    allImageUrls.push(post.imageUrl);
+    console.log('X: Using single imageUrl');
   }
   
   console.log('X: Post data received:', JSON.stringify({ 
     hasVideoKey: !!post.videoKey, 
     hasVideoUrl: !!post.videoUrl,
-    hasImageKey: !!imageKey,
-    hasImageUrl: !!imageUrl,
-    isShort: post.isShort,
-    totalImages: imageCount
+    imageCount: allImageUrls.length,
+    isShort: post.isShort
   }));
   
-  // Upload media - prioritize video over thumbnail (like YouTube)
-  let mediaId = null;
+  // Upload media - X supports up to 4 images OR 1 video per tweet
+  const mediaIds = [];
   
   // For Shorts/Videos: Try videoKey first, then videoUrl
   if (post.videoKey || post.videoUrl) {
+    let videoMediaId = null;
+    
     // Try S3 direct access first (if videoKey available)
     if (post.videoKey) {
       try {
@@ -539,22 +542,22 @@ async function postTweet(tenantId, post, settings) {
         }));
         const videoBuffer = await streamToBuffer(s3Response.Body);
         console.log('X: Video loaded from S3, size:', (videoBuffer.length / (1024 * 1024)).toFixed(1), 'MB');
-        mediaId = await uploadMediaOAuth1(settings, videoBuffer, true);
+        videoMediaId = await uploadMediaOAuth1(settings, videoBuffer, true);
       } catch (videoError) {
         console.log('X: S3 video load error:', videoError.message);
       }
     }
     
     // Fallback to videoUrl (CloudFront URL)
-    if (!mediaId) {
-      const videoUrl = post.videoUrl || `https://${process.env.CLOUDFRONT_DOMAIN}/${post.videoKey}`;
+    if (!videoMediaId) {
+      const videoUrl = post.videoUrl || `https://${cfDomain}/${post.videoKey}`;
       try {
         console.log('X: Downloading video from URL:', videoUrl);
         const videoResponse = await fetch(videoUrl);
         if (videoResponse.ok) {
           const videoBuffer = Buffer.from(await videoResponse.arrayBuffer());
           console.log('X: Video downloaded, size:', (videoBuffer.length / (1024 * 1024)).toFixed(1), 'MB');
-          mediaId = await uploadMediaOAuth1(settings, videoBuffer, true);
+          videoMediaId = await uploadMediaOAuth1(settings, videoBuffer, true);
         } else {
           console.log('X: Video download failed:', videoResponse.status);
         }
@@ -562,53 +565,72 @@ async function postTweet(tenantId, post, settings) {
         console.log('X: Video URL download failed:', e.message);
       }
     }
+    
+    if (videoMediaId) {
+      mediaIds.push(videoMediaId);
+      // X only allows 1 video per tweet, no additional images
+    }
   }
   
-  // If no video or video upload failed, try image
-  if (!mediaId && (imageKey || imageUrl)) {
-    // Try S3 direct access first
-    if (imageKey) {
-      try {
-        console.log('X: Loading image from S3:', imageKey);
-        const s3Response = await s3.send(new GetObjectCommand({
-          Bucket: process.env.ASSETS_BUCKET,
-          Key: imageKey
-        }));
-        const imgBuffer = await streamToBuffer(s3Response.Body);
-        console.log('X: Image loaded from S3, size:', (imgBuffer.length / 1024).toFixed(1), 'KB');
-        mediaId = await uploadMediaOAuth1(settings, imgBuffer, false);
-      } catch (imgError) {
-        console.log('X: S3 image load error:', imgError.message);
-      }
-    }
+  // If no video uploaded, try all images (up to 4)
+  if (mediaIds.length === 0 && allImageUrls.length > 0) {
+    const maxImages = Math.min(allImageUrls.length, 4); // X supports max 4 images
+    console.log(`X: Uploading ${maxImages} images...`);
     
-    // Fallback to imageUrl
-    if (!mediaId && imageUrl) {
-      try {
-        console.log('X: Downloading image from URL:', imageUrl);
-        const imgResponse = await fetch(imageUrl);
-        if (imgResponse.ok) {
-          const imgBuffer = Buffer.from(await imgResponse.arrayBuffer());
-          console.log('X: Image downloaded, size:', (imgBuffer.length / 1024).toFixed(1), 'KB');
-          mediaId = await uploadMediaOAuth1(settings, imgBuffer, false);
+    for (let i = 0; i < maxImages; i++) {
+      let imgMediaId = null;
+      
+      // Try S3 direct access first
+      if (allImageKeys[i]) {
+        try {
+          console.log(`X: Loading image ${i + 1} from S3:`, allImageKeys[i]);
+          const s3Response = await s3.send(new GetObjectCommand({
+            Bucket: process.env.ASSETS_BUCKET,
+            Key: allImageKeys[i]
+          }));
+          const imgBuffer = await streamToBuffer(s3Response.Body);
+          console.log(`X: Image ${i + 1} loaded from S3, size:`, (imgBuffer.length / 1024).toFixed(1), 'KB');
+          imgMediaId = await uploadMediaOAuth1(settings, imgBuffer, false);
+        } catch (imgError) {
+          console.log(`X: S3 image ${i + 1} load error:`, imgError.message);
         }
-      } catch (e) {
-        console.log('X: Image URL download failed:', e.message);
+      }
+      
+      // Fallback to URL
+      if (!imgMediaId && allImageUrls[i]) {
+        try {
+          console.log(`X: Downloading image ${i + 1} from URL:`, allImageUrls[i]);
+          const imgResponse = await fetch(allImageUrls[i]);
+          if (imgResponse.ok) {
+            const imgBuffer = Buffer.from(await imgResponse.arrayBuffer());
+            console.log(`X: Image ${i + 1} downloaded, size:`, (imgBuffer.length / 1024).toFixed(1), 'KB');
+            imgMediaId = await uploadMediaOAuth1(settings, imgBuffer, false);
+          }
+        } catch (e) {
+          console.log(`X: Image ${i + 1} URL download failed:`, e.message);
+        }
+      }
+      
+      if (imgMediaId) {
+        mediaIds.push(imgMediaId);
+        console.log(`X: Image ${i + 1} uploaded, media_id:`, imgMediaId);
       }
     }
   }
+  
+  console.log('X: Total media uploaded:', mediaIds.length);
   
   // Post tweet - prefer OAuth 1.0a (supports media), fallback to OAuth 2.0 (text only)
   const creds = getOAuth1Credentials(settings);
   const hasOAuth1 = creds.apiKey && creds.apiSecret && creds.accessToken && creds.accessTokenSecret;
   
-  console.log('X: Posting tweet, hasMedia:', !!mediaId, 'isShort:', post.isShort, 'hasOAuth1:', hasOAuth1, 'hasOAuth2:', !!settings.oauth2AccessToken);
+  console.log('X: Posting tweet, mediaCount:', mediaIds.length, 'isShort:', post.isShort, 'hasOAuth1:', hasOAuth1, 'hasOAuth2:', !!settings.oauth2AccessToken);
   
   if (hasOAuth1) {
-    return await postTweetOAuth1(settings, tweetText, mediaId);
+    return await postTweetOAuth1(settings, tweetText, mediaIds);
   } else if (settings.oauth2AccessToken) {
     // OAuth 2.0 fallback - text only (no media support)
-    if (mediaId) {
+    if (mediaIds.length > 0) {
       console.log('X: Warning - OAuth 2.0 kann keine Medien posten, nur Text');
     }
     return await postTweetOAuth2(tenantId, settings, tweetText);
@@ -663,14 +685,14 @@ async function postTweetOAuth2(tenantId, settings, text) {
 /**
  * Post tweet using OAuth 1.0a with v2 API - works with media
  */
-async function postTweetOAuth1(settings, text, mediaId) {
+async function postTweetOAuth1(settings, text, mediaIds) {
   // Twitter Free Tier: Use v2 API for tweets, but with OAuth 1.0a auth
   const url = 'https://api.twitter.com/2/tweets';
   const creds = getOAuth1Credentials(settings);
   
   const tweetPayload = { text: text };
-  if (mediaId) {
-    tweetPayload.media = { media_ids: [mediaId] };
+  if (mediaIds && mediaIds.length > 0) {
+    tweetPayload.media = { media_ids: mediaIds };
   }
   
   // Generate OAuth 1.0a signature for v2 endpoint (no body params in signature for JSON)

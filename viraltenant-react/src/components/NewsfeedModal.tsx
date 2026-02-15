@@ -275,6 +275,58 @@ export function NewsfeedModal({ isOpen, onClose, onSuccess, post, mode }: Newsfe
     return `https://${trimmed}`;
   };
 
+  // Extract first frame from a video file as a JPEG thumbnail
+  const extractVideoThumbnail = (videoFile: File): Promise<File | null> => {
+    return new Promise((resolve) => {
+      try {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        video.muted = true;
+        video.playsInline = true;
+        
+        const objectUrl = URL.createObjectURL(videoFile);
+        video.src = objectUrl;
+        
+        const cleanup = () => URL.revokeObjectURL(objectUrl);
+        
+        video.onloadeddata = () => {
+          // Seek to 0.1s to avoid potential black first frame
+          video.currentTime = 0.1;
+        };
+        
+        video.onseeked = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) { cleanup(); resolve(null); return; }
+            
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob((blob) => {
+              cleanup();
+              if (!blob) { resolve(null); return; }
+              const thumbFile = new File([blob], `thumb-${Date.now()}.jpg`, { type: 'image/jpeg' });
+              console.log('Video thumbnail extracted:', thumbFile.size, 'bytes');
+              resolve(thumbFile);
+            }, 'image/jpeg', 0.85);
+          } catch (err) {
+            console.error('Thumbnail extraction error:', err);
+            cleanup();
+            resolve(null);
+          }
+        };
+        
+        video.onerror = () => { cleanup(); resolve(null); };
+        // Timeout fallback
+        setTimeout(() => { cleanup(); resolve(null); }, 10000);
+      } catch (err) {
+        console.error('Thumbnail extraction setup error:', err);
+        resolve(null);
+      }
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -348,6 +400,34 @@ export function NewsfeedModal({ isOpen, onClose, onSuccess, post, mode }: Newsfe
       // Use first image as main imageKey for backwards compatibility
       if (imageKeys.length > 0 && !imageKey) {
         imageKey = imageKeys[0];
+      }
+
+      // Auto-generate thumbnail from video if no images present
+      // This ensures crosspost platforms that don't support video still get an image
+      if (videoKey && imageKeys.length === 0 && !imageKey) {
+        const videoMediaItem = mediaItems.find(m => m.type === 'video' && m.file);
+        const videoFileForThumb = videoMediaItem?.file || videoFile;
+        
+        if (videoFileForThumb) {
+          console.log('No images in video post - extracting thumbnail from video...');
+          const thumbFile = await extractVideoThumbnail(videoFileForThumb);
+          if (thumbFile) {
+            try {
+              const thumbUpload = await newsfeedService.generateUploadUrl(
+                thumbFile.name,
+                thumbFile.type,
+                'image'
+              );
+              await newsfeedService.uploadToS3(thumbUpload.uploadUrl, thumbFile);
+              imageKey = thumbUpload.key;
+              imageKeys.push(thumbUpload.key);
+              imageUrls.push(thumbUpload.publicUrl || `https://viraltenant.com/${thumbUpload.key}`);
+              console.log('Video thumbnail uploaded as image:', thumbUpload.key);
+            } catch (thumbErr) {
+              console.error('Failed to upload video thumbnail:', thumbErr);
+            }
+          }
+        }
       }
 
       // Ensure URLs have protocol

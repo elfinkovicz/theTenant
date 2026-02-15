@@ -116,15 +116,17 @@ function buildMessage(post, tenantName) {
 function getMediaUrls(post) {
   const urls = [];
   
-  // Check for multiple images first (imageUrls array)
-  if (post.imageUrls && post.imageUrls.length > 0) {
-    urls.push(...post.imageUrls.map(url => ({ url, type: 'image' })));
-  } else if (post.imageKeys && post.imageKeys.length > 0) {
+  // Check for imageKeys first (S3 keys → CloudFront, most reliable)
+  if (post.imageKeys && post.imageKeys.length > 0) {
     urls.push(...post.imageKeys.map(key => ({ url: `https://${CLOUDFRONT_DOMAIN}/${key}`, type: 'image' })));
-  } else if (post.imageUrl) {
-    urls.push({ url: post.imageUrl, type: 'image' });
+    console.log('WhatsApp: Resolved', post.imageKeys.length, 'images from imageKeys via CloudFront');
+  } else if (post.imageUrls && post.imageUrls.length > 0) {
+    urls.push(...post.imageUrls.map(url => ({ url, type: 'image' })));
+    console.log('WhatsApp: Using', post.imageUrls.length, 'pre-resolved imageUrls');
   } else if (post.imageKey) {
     urls.push({ url: `https://${CLOUDFRONT_DOMAIN}/${post.imageKey}`, type: 'image' });
+  } else if (post.imageUrl) {
+    urls.push({ url: post.imageUrl, type: 'image' });
   }
   
   // Add video if present

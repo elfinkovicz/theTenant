@@ -79,7 +79,6 @@ export const Header = () => {
     { path: '/team', label: 'Team' },
     { path: '/contact', label: 'Kontakt' },
     { path: '/pricing', label: 'Preise', platformOnly: true },
-    { path: '/tenant-registration', label: 'Tenant erstellen', platformOnly: true },
     // Add custom pages
     ...customPages.map(cp => ({
       path: `/page/${cp.slug}`,
@@ -210,13 +209,20 @@ export const Header = () => {
                   <LogOut size={20} />
                 </button>
               </div>
-            ) : (
+            ) : !isPlatform && (
               <div className="flex items-center space-x-4">
                 <Link to="/login" className="btn-guest">
                   Login
                 </Link>
                 <Link to="/register" className="btn-primary">
                   Registrieren
+                </Link>
+              </div>
+            )}
+            {isPlatform && !isAuthenticated && (
+              <div className="flex items-center space-x-4">
+                <Link to="/tenant-registration" className="btn-primary">
+                  Tenant erstellen
                 </Link>
               </div>
             )}
@@ -286,6 +292,14 @@ export const Header = () => {
                     Logout
                   </button>
                 </>
+              ) : isPlatform ? (
+                <Link
+                  to="/tenant-registration"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="block btn-primary text-center"
+                >
+                  Tenant erstellen
+                </Link>
               ) : (
                 <>
                   <Link

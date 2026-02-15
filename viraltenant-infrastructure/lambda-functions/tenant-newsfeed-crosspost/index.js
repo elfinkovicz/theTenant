@@ -992,17 +992,8 @@ async function testSlack(settings) {
 }
 
 async function testFacebook(settings) {
-  // Create a real test post on the Facebook page
-  const testMessage = '🧪 Test-Nachricht\n\nDeine Facebook-Integration funktioniert! ✅\n\nDiese Nachricht wurde automatisch von deiner Crossposting-Integration gesendet.';
-  
-  const response = await fetch(`https://graph.facebook.com/v18.0/${settings.pageId}/feed`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      message: testMessage,
-      access_token: settings.pageAccessToken
-    })
-  });
+  // Only verify connection - don't create a real post
+  const response = await fetch(`https://graph.facebook.com/v18.0/${settings.pageId}?fields=name,id&access_token=${settings.pageAccessToken}`);
   
   if (!response.ok) {
     const error = await response.json();
@@ -1010,7 +1001,7 @@ async function testFacebook(settings) {
   }
   
   const data = await response.json();
-  return { success: true, postId: data.id };
+  return { success: true, pageName: data.name, message: `Verbunden mit Facebook-Seite: ${data.name} ✅` };
 }
 
 async function testInstagram(settings) {
@@ -1039,8 +1030,8 @@ async function testSignal(settings) {
   return { success: true };
 }
 
-async function testXTwitter(settings, sendTweet = false) {
-  // Test X connection - supports OAuth 1.0a (with platform consumer keys) and OAuth 2.0
+async function testXTwitter(settings) {
+  // Only verify connection - don't post a tweet
   const crypto = require('crypto');
   
   // Resolve OAuth 1.0a credentials: Platform consumer keys + per-tenant access tokens
@@ -1129,149 +1120,48 @@ async function testXTwitter(settings, sendTweet = false) {
   const userData = await verifyResponse.json();
   const username = userData.data?.username;
   
-  if (!sendTweet) {
-    return { 
-      success: true, 
-      username: username,
-      message: `Verbunden als @${username} ✅`
-    };
-  }
-  
-  // Send a test tweet
-  const tweetUrl = 'https://api.twitter.com/2/tweets';
-  const tweetText = `🧪 Test-Tweet von ViralTenant\n\nDiese Nachricht wurde automatisch gesendet um die X-Integration zu testen.\n\n✅ Crossposting funktioniert!\n\n#ViralTenant #Test`;
-  const tweetBody = JSON.stringify({ text: tweetText });
-  
-  let tweetResponse;
-  if (hasOAuth1) {
-    const authHeader = makeOAuth1Header('POST', tweetUrl);
-    tweetResponse = await fetch(tweetUrl, {
-      method: 'POST',
-      headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
-      body: tweetBody
-    });
-  } else {
-    tweetResponse = await fetch(tweetUrl, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${settings.oauth2AccessToken}`, 'Content-Type': 'application/json' },
-      body: tweetBody
-    });
-  }
-  
-  const tweetResponseText = await tweetResponse.text();
-  console.log('X tweet response:', tweetResponse.status, tweetResponseText);
-  
-  if (!tweetResponse.ok) {
-    let errorData;
-    try { errorData = JSON.parse(tweetResponseText); } catch (e) { errorData = { detail: tweetResponseText }; }
-    if (tweetResponse.status === 403) throw new Error('X API Zugriff verweigert. Bitte stelle sicher, dass deine App "Read and Write" Permissions hat.');
-    if (tweetResponse.status === 429) throw new Error('X Rate Limit erreicht. Bitte warte einige Minuten.');
-    throw new Error(errorData.detail || errorData.title || `Tweet fehlgeschlagen: ${tweetResponse.status}`);
-  }
-  
-  const tweetData = JSON.parse(tweetResponseText);
-  const tweetId = tweetData.data?.id;
-  
   return { 
     success: true, 
     username: username,
-    tweetId: tweetId,
-    message: `Test-Tweet gesendet! 🎉 https://x.com/${username}/status/${tweetId}`
+    message: `Verbunden als @${username} ✅`
   };
 }
 
 async function testLinkedIn(settings) {
-  // LinkedIn API - Test by posting a real test message
-  // With w_member_social scope, we can post to the user's personal profile
-  
+  // Only verify connection - don't create a real post
   if (!settings.accessToken || settings.accessToken.length < 50) {
     throw new Error('Access Token scheint ungültig zu sein. Bitte generiere einen neuen Token.');
   }
   
-  // Check if we have a stored person URN
-  let personUrn = settings.personUrn;
-  
-  if (!personUrn) {
-    // Try to get it from /v2/me (might work with some app configurations)
-    try {
-      const meResponse = await fetch('https://api.linkedin.com/v2/me', {
-        headers: {
-          'Authorization': `Bearer ${settings.accessToken}`,
-          'X-Restli-Protocol-Version': '2.0.0'
-        }
-      });
-      
-      if (meResponse.ok) {
-        const meData = await meResponse.json();
-        personUrn = `urn:li:person:${meData.id}`;
-        console.log('Got person URN from /v2/me:', personUrn);
-      } else {
-        console.log('/v2/me failed with status:', meResponse.status);
-      }
-    } catch (e) {
-      console.log('Could not get person URN from /v2/me:', e.message);
-    }
-  }
-  
-  if (!personUrn) {
-    throw new Error('Person URN fehlt. Bitte trage deine LinkedIn Member ID in den Einstellungen ein (Format: urn:li:person:DEINE_ID). Du findest sie im LinkedIn Developer Portal unter OAuth Tools → Token Inspector.');
-  }
-  
-  console.log('Using person URN:', personUrn);
-  
-  const testMessage = `🧪 Test-Nachricht von ViralTenant
-
-Diese Nachricht wurde automatisch gesendet, um die LinkedIn-Integration zu testen. ✅
-
-Gepostet am: ${new Date().toLocaleString('de-DE')}`;
-
-  // Use UGC Posts API
-  const postData = {
-    author: personUrn,
-    lifecycleState: 'PUBLISHED',
-    specificContent: {
-      'com.linkedin.ugc.ShareContent': {
-        shareCommentary: { text: testMessage },
-        shareMediaCategory: 'NONE'
-      }
-    },
-    visibility: {
-      'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC'
-    }
-  };
-  
-  const postResponse = await fetch('https://api.linkedin.com/v2/ugcPosts', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${settings.accessToken}`,
-      'Content-Type': 'application/json',
-      'X-Restli-Protocol-Version': '2.0.0'
-    },
-    body: JSON.stringify(postData)
+  // Try userinfo endpoint first (OpenID Connect)
+  const userinfoResponse = await fetch('https://api.linkedin.com/v2/userinfo', {
+    headers: { 'Authorization': `Bearer ${settings.accessToken}` }
   });
   
-  if (!postResponse.ok) {
-    const errorData = await postResponse.json().catch(() => ({}));
-    console.error('LinkedIn post error:', postResponse.status, errorData);
-    
-    if (postResponse.status === 401) {
-      throw new Error('Access Token ist ungültig oder abgelaufen. Bitte generiere einen neuen Token.');
-    }
-    if (postResponse.status === 403) {
-      throw new Error('Keine Berechtigung zum Posten. Stelle sicher, dass "Share on LinkedIn" in deiner App aktiviert ist.');
-    }
-    
-    throw new Error(errorData.message || `LinkedIn Post fehlgeschlagen: ${postResponse.status}`);
+  if (userinfoResponse.ok) {
+    const data = await userinfoResponse.json();
+    return { success: true, message: `Verbunden als ${data.name || data.email || 'LinkedIn User'} ✅` };
   }
   
-  const postId = postResponse.headers.get('x-restli-id') || (await postResponse.json().catch(() => ({}))).id;
-  console.log('LinkedIn test post created:', postId);
+  // Fallback to /v2/me
+  const meResponse = await fetch('https://api.linkedin.com/v2/me', {
+    headers: {
+      'Authorization': `Bearer ${settings.accessToken}`,
+      'X-Restli-Protocol-Version': '2.0.0'
+    }
+  });
   
-  return { 
-    success: true, 
-    postId: postId,
-    message: 'Test-Post erfolgreich auf LinkedIn veröffentlicht! 🎉'
-  };
+  if (meResponse.ok) {
+    const meData = await meResponse.json();
+    const name = [meData.localizedFirstName, meData.localizedLastName].filter(Boolean).join(' ') || 'LinkedIn User';
+    return { success: true, message: `Verbunden als ${name} ✅` };
+  }
+  
+  if (meResponse.status === 401) {
+    throw new Error('Access Token ist ungültig oder abgelaufen. Bitte erneut verbinden.');
+  }
+  
+  throw new Error(`LinkedIn Verbindungstest fehlgeschlagen: ${meResponse.status}`);
 }
 
 async function testYouTube(settings) {
@@ -1299,8 +1189,8 @@ async function testYouTube(settings) {
   const tokenData = await tokenResponse.json();
   const accessToken = tokenData.access_token;
   
-  // Get channel ID
-  const channelResponse = await fetch('https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails&mine=true', {
+  // Only verify connection by fetching channel info - don't post anything
+  const channelResponse = await fetch('https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true', {
     headers: { 'Authorization': `Bearer ${accessToken}` }
   });
   
@@ -1314,67 +1204,10 @@ async function testYouTube(settings) {
   }
   
   const channel = channelData.items[0];
-  const channelId = channel.id;
-  
-  // Post a Community Post (Activity)
-  // Note: YouTube Community Posts API requires channel to have Community tab enabled (1000+ subscribers)
-  const testMessage = `🧪 Test-Nachricht von ViralTenant
-
-Diese Nachricht wurde automatisch gesendet, um die YouTube-Integration zu testen. ✅
-
-${new Date().toLocaleString('de-DE')}`;
-
-  // Try to create a community post using the YouTube Data API
-  // The activities.insert endpoint can create bulletin posts
-  const postResponse = await fetch('https://www.googleapis.com/youtube/v3/activities?part=snippet,contentDetails', {
-    method: 'POST',
-    headers: { 
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      snippet: {
-        description: testMessage
-      },
-      contentDetails: {
-        bulletin: {
-          resourceId: {
-            kind: 'youtube#channel',
-            channelId: channelId
-          }
-        }
-      }
-    })
-  });
-  
-  if (!postResponse.ok) {
-    const errorData = await postResponse.json().catch(() => ({}));
-    console.error('YouTube post error:', postResponse.status, errorData);
-    
-    // If bulletin posting fails, try alternative method or show helpful message
-    if (postResponse.status === 403) {
-      // Check if it's a permission issue
-      if (errorData.error?.message?.includes('community')) {
-        throw new Error('Community Posts erfordern mindestens 500 Abonnenten. Dein Kanal ist aber erfolgreich verbunden! ✅');
-      }
-      throw new Error('Keine Berechtigung. Stelle sicher, dass die YouTube Data API aktiviert ist und die richtigen Scopes gewährt wurden.');
-    }
-    
-    // Even if posting fails, the connection works - return success with info
-    return { 
-      success: true, 
-      channelName: channel.snippet.title,
-      message: `YouTube verbunden als "${channel.snippet.title}"! Community Posts erfordern 500+ Abonnenten.`
-    };
-  }
-  
-  const postData = await postResponse.json();
-  
   return { 
     success: true, 
     channelName: channel.snippet.title,
-    postId: postData.id,
-    message: `Test-Post erfolgreich auf YouTube gepostet! 🎉`
+    message: `Verbunden mit YouTube-Kanal: ${channel.snippet.title} ✅`
   };
 }
 
@@ -1383,7 +1216,7 @@ async function testBluesky(settings) {
     throw new Error('Bluesky Handle und App Password erforderlich.');
   }
   
-  // Create session with Bluesky
+  // Only verify connection by creating a session - don't post anything
   const sessionResponse = await fetch('https://bsky.social/xrpc/com.atproto.server.createSession', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1399,42 +1232,10 @@ async function testBluesky(settings) {
   }
   
   const session = await sessionResponse.json();
-  
-  // Post a test message
-  const testMessage = `🧪 Test-Nachricht von ViralTenant
-
-Diese Nachricht wurde automatisch gesendet, um die Bluesky-Integration zu testen. ✅
-
-${new Date().toLocaleString('de-DE')}`;
-
-  const postResponse = await fetch('https://bsky.social/xrpc/com.atproto.repo.createRecord', {
-    method: 'POST',
-    headers: { 
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session.accessJwt}`
-    },
-    body: JSON.stringify({
-      repo: session.did,
-      collection: 'app.bsky.feed.post',
-      record: {
-        text: testMessage,
-        createdAt: new Date().toISOString()
-      }
-    })
-  });
-  
-  if (!postResponse.ok) {
-    const errorData = await postResponse.json().catch(() => ({}));
-    throw new Error(errorData.message || 'Bluesky-Post fehlgeschlagen.');
-  }
-  
-  const postData = await postResponse.json();
-  
   return { 
     success: true, 
-    handle: settings.handle,
-    postUri: postData.uri,
-    message: 'Test-Post erfolgreich auf Bluesky gepostet! 🎉'
+    handle: session.handle || settings.handle,
+    message: `Verbunden als @${session.handle || settings.handle} ✅`
   };
 }
 
@@ -1450,49 +1251,23 @@ async function testMastodon(settings) {
   }
   instanceUrl = instanceUrl.replace(/\/$/, '');
   
-  // Verify credentials first
+  // Only verify connection - don't post anything
   const verifyResponse = await fetch(`${instanceUrl}/api/v1/accounts/verify_credentials`, {
     headers: { 'Authorization': `Bearer ${settings.accessToken}` }
   });
   
   if (!verifyResponse.ok) {
+    if (verifyResponse.status === 401) {
+      throw new Error('Mastodon Access Token ungültig oder abgelaufen.');
+    }
     throw new Error('Mastodon-Authentifizierung fehlgeschlagen. Überprüfe Access Token.');
   }
   
   const account = await verifyResponse.json();
-  
-  // Post a test status
-  const testMessage = `🧪 Test-Nachricht von ViralTenant
-
-Diese Nachricht wurde automatisch gesendet, um die Mastodon-Integration zu testen. ✅
-
-${new Date().toLocaleString('de-DE')}`;
-
-  const postResponse = await fetch(`${instanceUrl}/api/v1/statuses`, {
-    method: 'POST',
-    headers: { 
-      'Authorization': `Bearer ${settings.accessToken}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      status: testMessage,
-      visibility: 'public'
-    })
-  });
-  
-  if (!postResponse.ok) {
-    const errorData = await postResponse.json().catch(() => ({}));
-    throw new Error(errorData.error || 'Mastodon-Post fehlgeschlagen.');
-  }
-  
-  const postData = await postResponse.json();
-  
   return { 
     success: true, 
     username: account.username,
-    postId: postData.id,
-    postUrl: postData.url,
-    message: `Test-Post erfolgreich auf Mastodon gepostet! 🎉`
+    message: `Verbunden als @${account.username}@${new URL(instanceUrl).hostname} ✅`
   };
 }
 
@@ -1501,73 +1276,23 @@ async function testThreads(settings) {
     throw new Error('Threads Access Token und User ID erforderlich.');
   }
   
-  // Verify credentials by getting user profile
+  // Only verify connection - don't create a real post
   const verifyResponse = await fetch(`https://graph.threads.net/v1.0/me?fields=username&access_token=${settings.accessToken}`);
   
   if (!verifyResponse.ok) {
     const errorText = await verifyResponse.text();
     console.error('Threads verify failed:', errorText);
+    if (verifyResponse.status === 401) {
+      throw new Error('Threads Access Token abgelaufen. Bitte erneut verbinden.');
+    }
     throw new Error('Threads-Authentifizierung fehlgeschlagen. Überprüfe Access Token.');
   }
   
   const profile = await verifyResponse.json();
-  
-  // Post a test thread
-  const testMessage = `🧪 Test-Nachricht von ViralTenant
-
-Diese Nachricht wurde automatisch gesendet, um die Threads-Integration zu testen. ✅
-
-${new Date().toLocaleString('de-DE')}`;
-
-  // Step 1: Create container
-  const createResponse = await fetch(`https://graph.threads.net/v1.0/${settings.userId}/threads`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      text: testMessage,
-      media_type: 'TEXT',
-      access_token: settings.accessToken
-    })
-  });
-  
-  const createText = await createResponse.text();
-  console.log('Threads create response:', createResponse.status, createText);
-  
-  if (!createResponse.ok) {
-    let error;
-    try { error = JSON.parse(createText); } catch (e) { error = { error: { message: createText } }; }
-    throw new Error(error.error?.message || 'Thread-Erstellung fehlgeschlagen.');
-  }
-  
-  const createData = JSON.parse(createText);
-  const containerId = createData.id;
-  
-  // Step 2: Publish thread
-  const publishResponse = await fetch(`https://graph.threads.net/v1.0/${settings.userId}/threads_publish`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      creation_id: containerId,
-      access_token: settings.accessToken
-    })
-  });
-  
-  const publishText = await publishResponse.text();
-  console.log('Threads publish response:', publishResponse.status, publishText);
-  
-  if (!publishResponse.ok) {
-    let error;
-    try { error = JSON.parse(publishText); } catch (e) { error = { error: { message: publishText } }; }
-    throw new Error(error.error?.message || 'Thread-Veröffentlichung fehlgeschlagen.');
-  }
-  
-  const publishData = JSON.parse(publishText);
-  
   return { 
     success: true, 
     username: profile.username,
-    threadId: publishData.id,
-    message: `Test-Thread erfolgreich auf Threads gepostet! 🎉`
+    message: `Verbunden als @${profile.username} ✅`
   };
 }
 
@@ -1888,17 +1613,8 @@ exports.handler = async (event) => {
       }
       
       try {
-        // Parse request body for additional options
-        const body = JSON.parse(event.body || '{}');
-        
-        // For X Twitter, check if we should send a real tweet
-        let result;
-        if (provider === 'xtwitter') {
-          const sendTweet = body.sendTweet === true;
-          result = await testFn(settings, sendTweet);
-        } else {
-          result = await testFn(settings);
-        }
+        // All test functions only verify connection, no real posts
+        const result = await testFn(settings);
         return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ message: 'Test erfolgreich!', ...result }) };
       } catch (testError) {
         console.error(`${provider} test error:`, testError);
@@ -1932,7 +1648,8 @@ exports.handler = async (event) => {
           ...currentSettings,
           accessToken: accessToken,
           accountId: accountId,
-          accountName: username ? `@${username}` : currentSettings.accountName
+          accountName: username ? `@${username}` : currentSettings.accountName,
+          enabled: true
         });
         
         return { 
@@ -2001,7 +1718,8 @@ exports.handler = async (event) => {
           personUrn: result.personUrn,
           organizationName: result.selectedOrg ? result.selectedOrg.name : (result.displayName || currentSettings.organizationName),
           organizationId: result.selectedOrg ? result.selectedOrg.id : '',
-          postAsOrganization: !!result.selectedOrg
+          postAsOrganization: !!result.selectedOrg,
+          enabled: true
         };
         
         // If user explicitly chose personal profile
@@ -2142,6 +1860,27 @@ exports.handler = async (event) => {
           message: 'OAuth fehlgeschlagen', 
           error: oauthError.message 
         }) };
+      }
+    }
+
+    // DELETE /xtwitter/oauth/disconnect - Disconnect X (Twitter) OAuth
+    if (httpMethod === 'DELETE' && provider === 'xtwitter' && path.includes('/oauth/disconnect')) {
+      if (!userId || !(await isUserTenantAdmin(userId, tenantId, isPlatformAdmin))) {
+        return { statusCode: 403, headers: corsHeaders, body: JSON.stringify({ message: 'Keine Berechtigung' }) };
+      }
+
+      try {
+        const defaultSettings = DEFAULT_SETTINGS['xtwitter'] || { enabled: false };
+        await updateSettings('xtwitter', tenantId, {
+          ...defaultSettings,
+          enabled: false,
+          tenant_id: tenantId
+        });
+
+        return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ message: 'X (Twitter) erfolgreich getrennt' }) };
+      } catch (error) {
+        console.error('X disconnect error:', error);
+        return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ message: 'Fehler beim Trennen', error: error.message }) };
       }
     }
 

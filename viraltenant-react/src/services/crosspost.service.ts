@@ -47,6 +47,8 @@ export interface WhatsAppSettings {
   phoneNumberId?: string
   groupId?: string
   groupName?: string
+  postsToday?: number
+  postsLastReset?: string
 }
 
 export interface TelegramSettings {
@@ -54,6 +56,8 @@ export interface TelegramSettings {
   botToken: string
   chatId: string
   chatName: string
+  postsToday?: number
+  postsLastReset?: string
 }
 
 export interface EmailSettings {
@@ -67,12 +71,16 @@ export interface DiscordSettings {
   enabled: boolean
   webhookUrl: string
   channelName: string
+  postsToday?: number
+  postsLastReset?: string
 }
 
 export interface SlackSettings {
   enabled: boolean
   webhookUrl: string
   channelName: string
+  postsToday?: number
+  postsLastReset?: string
 }
 
 export interface FacebookSettings {
@@ -80,6 +88,8 @@ export interface FacebookSettings {
   pageAccessToken: string
   pageId: string
   pageName: string
+  postsToday?: number
+  postsLastReset?: string
 }
 
 export interface InstagramSettings {
@@ -87,6 +97,8 @@ export interface InstagramSettings {
   accessToken: string
   accountId: string
   accountName: string
+  postsToday?: number
+  postsLastReset?: string
 }
 
 export interface SignalSettings {
@@ -94,6 +106,8 @@ export interface SignalSettings {
   apiUrl: string
   phoneNumber: string
   groupId: string
+  postsToday?: number
+  postsLastReset?: string
 }
 
 export interface XTwitterSettings {
@@ -109,6 +123,8 @@ export interface XTwitterSettings {
   oauth2AccessToken?: string
   oauth2RefreshToken?: string
   userId?: string
+  postsToday?: number
+  postsLastReset?: string
 }
 
 export interface LinkedInSettings {
@@ -119,6 +135,8 @@ export interface LinkedInSettings {
   clientId: string
   clientSecret: string
   personUrn?: string
+  postsToday?: number
+  postsLastReset?: string
 }
 
 export interface ThreadsSettings {
@@ -126,6 +144,8 @@ export interface ThreadsSettings {
   accessToken: string
   userId: string
   username: string
+  postsToday?: number
+  postsLastReset?: string
 }
 
 export interface YouTubeSettings {
@@ -136,6 +156,8 @@ export interface YouTubeSettings {
   channelName: string
   clientId: string
   clientSecret: string
+  postsToday?: number
+  postsLastReset?: string
 }
 
 export interface BlueskySettings {
@@ -143,6 +165,8 @@ export interface BlueskySettings {
   handle: string
   appPassword: string
   displayName: string
+  postsToday?: number
+  postsLastReset?: string
 }
 
 export interface MastodonSettings {
@@ -150,6 +174,8 @@ export interface MastodonSettings {
   instanceUrl: string
   accessToken: string
   username: string
+  postsToday?: number
+  postsLastReset?: string
 }
 
 export interface TikTokSettings {
@@ -197,6 +223,8 @@ export interface SnapchatSettings {
   displayName: string
   expiresAt: number
   postAsStory: boolean
+  postsToday?: number
+  postsLastReset?: string
 }
 
 class CrosspostService {
@@ -472,9 +500,29 @@ class CrosspostService {
   }
 
   async sendXTwitterTestMessage(token: string): Promise<void> {
-    await axios.post(`${this.apiUrl}/xtwitter/test`, { sendTweet: true }, {
+    await axios.post(`${this.apiUrl}/xtwitter/test`, {}, {
       headers: this.getHeaders(token)
     })
+  }
+
+  async requestXTwitterOAuthToken(token: string, callbackUrl: string): Promise<{ oauthToken: string; authorizeUrl: string }> {
+    const response = await axios.post(`${this.apiUrl}/xtwitter/oauth/callback`, {
+      action: 'request-token',
+      callbackUrl
+    }, {
+      headers: this.getHeaders(token)
+    })
+    return response.data
+  }
+
+  async exchangeXTwitterOAuthVerifier(token: string, oauthToken: string, oauthVerifier: string): Promise<{ message: string; userId: string; username: string; accountName: string }> {
+    const response = await axios.post(`${this.apiUrl}/xtwitter/oauth/callback`, {
+      oauthToken,
+      oauthVerifier
+    }, {
+      headers: this.getHeaders(token)
+    })
+    return response.data
   }
 
   async testXTwitterConnection(token: string): Promise<{ success: boolean; message?: string; error?: string; username?: string }> {
@@ -491,6 +539,12 @@ class CrosspostService {
         error: errorData?.error || error.message || 'Verbindungstest fehlgeschlagen' 
       }
     }
+  }
+
+  async disconnectXTwitter(token: string): Promise<void> {
+    await axios.delete(`${this.apiUrl}/xtwitter/oauth/disconnect`, {
+      headers: this.getHeaders(token)
+    })
   }
 
   // LinkedIn methods

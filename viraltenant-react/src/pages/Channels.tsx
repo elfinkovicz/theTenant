@@ -389,8 +389,8 @@ export const Channels = () => {
                   <div 
                     className="relative flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-300 hover:shadow-lg"
                     style={{ 
-                      borderColor: `${channel.color}40`,
-                      backgroundColor: `${channel.color}10`,
+                      borderColor: channel.color === '#000000' || channel.color === '#000' ? '#1e3a5f' : `${channel.color}40`,
+                      backgroundColor: channel.color === '#000000' || channel.color === '#000' ? '#0a1628' : `${channel.color}10`,
                     }}
                   >
                     {/* Icon */}

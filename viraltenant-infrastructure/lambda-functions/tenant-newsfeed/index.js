@@ -384,6 +384,17 @@ async function sendCrosspostingNotifications(tenantId, post) {
       // Use the modular dispatcher system
       console.log('Using modular crosspost dispatcher:', dispatcherLambda);
       
+      // Email is handled inline (not by dispatcher) because it needs SES, Cognito, and opt-out logic
+      try {
+        const emailSettings = await getEmailSettings(tenantId);
+        if (emailSettings.enabled && emailSettings.senderPrefix) {
+          console.log('Sending Email notification (inline, not via dispatcher)');
+          await sendEmailNotification(tenantId, post, emailSettings);
+        }
+      } catch (emailError) {
+        console.error('Error sending email notification:', emailError);
+      }
+      
       const command = new InvokeCommand({
         FunctionName: dispatcherLambda,
         InvocationType: 'Event', // Async invocation - don't wait for response
@@ -585,20 +596,23 @@ async function sendEmailNotification(tenantId, post, settings) {
     const fromEmail = `${emailSettings.senderPrefix}@${senderDomain}`;
     const senderName = emailSettings.senderName || emailSettings.senderPrefix;
     
-    // Ensure image URL is set from imageKey if not already present
-    // For Shorts: use thumbnail (imageKey) as the display image
+    // Resolve all image/video URLs from S3 keys via CloudFront
+    const cfDomain = process.env.CLOUDFRONT_DOMAIN;
     const postWithImage = {
       ...post,
-      imageUrl: post.imageUrl || (post.imageKey ? `https://${process.env.CLOUDFRONT_DOMAIN}/${post.imageKey}` : null),
-      videoUrl: post.videoUrl || (post.videoKey ? `https://${process.env.CLOUDFRONT_DOMAIN}/${post.videoKey}` : null)
+      imageUrl: post.imageUrl || (post.imageKey ? `https://${cfDomain}/${post.imageKey}` : null),
+      videoUrl: post.videoUrl || (post.videoKey ? `https://${cfDomain}/${post.videoKey}` : null),
+      // Multi-image support
+      imageUrls: post.imageKeys?.map(k => `https://${cfDomain}/${k}`) || post.imageUrls || [],
+      mediaUrls: post.mediaKeys?.map(k => `https://${cfDomain}/${k}`) || post.mediaUrls || []
     };
     
-    // For Shorts without thumbnail, we can't show video in email - log warning
-    if (post.isShort && !postWithImage.imageUrl) {
-      console.log('Short without thumbnail - email will have no image preview');
+    // For Shorts/Videos without thumbnail, we can't show video in email - log warning
+    if ((post.isShort || post.videoKey) && !postWithImage.imageUrl) {
+      console.log('Video/Short without thumbnail - email will have no video preview');
     }
     
-    console.log('Post image URL:', postWithImage.imageUrl);
+    console.log('Post image URL:', postWithImage.imageUrl, '| Multi-images:', postWithImage.imageUrls?.length || 0, '| Media:', postWithImage.mediaUrls?.length || 0);
     
     // Build email content
     const subject = post.title;
@@ -759,6 +773,50 @@ async function getEmailSettings(tenantId) {
   }
 }
 
+// Build image section for email (supports single image, multi-image, and video thumbnail)
+function buildImageSection(post) {
+  const images = [];
+  
+  // Collect all image URLs: multi-image arrays take priority over single imageUrl
+  if (post.imageUrls && post.imageUrls.length > 0) {
+    images.push(...post.imageUrls);
+  } else if (post.mediaUrls && post.mediaUrls.length > 0) {
+    images.push(...post.mediaUrls);
+  } else if (post.imageUrl) {
+    images.push(post.imageUrl);
+  }
+  
+  // If post has a video, add thumbnail with video badge (use imageUrl as thumbnail)
+  // Only add video thumbnail if it wasn't already added as part of images above
+  const hasVideo = post.videoUrl || post.videoKey;
+  const videoThumbnail = hasVideo && post.imageUrl && images.indexOf(post.imageUrl) === -1 ? post.imageUrl : null;
+  
+  if (images.length === 0 && !videoThumbnail) {
+    return '';
+  }
+  
+  let html = '<div class="image-grid">';
+  
+  // Render all images
+  for (const imgUrl of images) {
+    html += `<div class="image-container"><img src="${imgUrl}" alt="${escapeHtml(post.title)}" class="post-image"></div>`;
+  }
+  
+  // Render video thumbnail with badge if video exists and thumbnail wasn't in images
+  if (videoThumbnail) {
+    html += `<div class="image-container">
+      <img src="${videoThumbnail}" alt="Video: ${escapeHtml(post.title)}" class="post-image">
+      <div class="video-badge">▶ Video</div>
+    </div>`;
+  } else if (hasVideo && images.length === 0) {
+    // Video without any thumbnail - show text hint
+    html += `<div class="image-container" style="background:#f0f0f0;padding:20px;border-radius:8px;"><span style="color:#666;">▶ Diesen Beitrag enthält ein Video</span></div>`;
+  }
+  
+  html += '</div>';
+  return html;
+}
+
 // Build HTML email template
 function buildEmailTemplate(post, senderName, tenantId, userEmail) {
   const baseUrl = process.env.WEBSITE_URL || 'https://viraltenant.com';
@@ -781,6 +839,9 @@ function buildEmailTemplate(post, senderName, tenantId, userEmail) {
           .title { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
           .image-container { margin: 20px 0; text-align: center; }
           .post-image { max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+          .image-grid { margin: 20px 0; }
+          .image-grid img { max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 12px; }
+          .video-badge { display: inline-block; background: rgba(0,0,0,0.7); color: white; padding: 4px 10px; border-radius: 4px; font-size: 12px; margin-top: -40px; position: relative; z-index: 1; }
           .description { margin: 15px 0; white-space: pre-wrap; font-size: 16px; }
           .meta { color: #666; font-size: 14px; margin: 10px 0; }
           .button { display: inline-block; background: #667eea; color: white !important; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin-top: 15px; font-weight: bold; }
@@ -796,11 +857,7 @@ function buildEmailTemplate(post, senderName, tenantId, userEmail) {
             <div class="title">${escapeHtml(post.title)}</div>
           </div>
           <div class="content">
-            ${post.imageUrl ? `
-              <div class="image-container">
-                <img src="${post.imageUrl}" alt="${escapeHtml(post.title)}" class="post-image">
-              </div>
-            ` : ''}
+            ${buildImageSection(post)}
             
             <div class="description">${escapeHtml(post.description)}</div>
             
@@ -2057,8 +2114,14 @@ exports.handler = async (event) => {
       const requestData = JSON.parse(event.body || '{}');
       const existingData = await getNewsfeed(tenantId);
       
-      // Check for newly published posts
-      const newlyPublishedPosts = isNewlyPublished(existingData.posts || [], requestData.posts || []);
+      // Skip crossposting when frontend signals a delete operation
+      const skipCrossposting = requestData.skipCrossposting === true;
+      
+      // Check for newly published posts (only if not a delete operation)
+      const newlyPublishedPosts = skipCrossposting ? [] : isNewlyPublished(existingData.posts || [], requestData.posts || []);
+      
+      // Remove skipCrossposting flag before saving to DB
+      delete requestData.skipCrossposting;
       
       // Update the newsfeed
       const updated = await updateNewsfeed(tenantId, requestData);

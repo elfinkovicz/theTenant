@@ -8,14 +8,31 @@ import { autoChannelService } from '../services/autoChannel.service'
 export const YouTubeCallback = () => {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { accessToken } = useAuthStore()
+  const { accessToken: storedAccessToken } = useAuthStore()
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [channelInfo, setChannelInfo] = useState<{ name: string; id: string } | null>(null)
   const [error, setError] = useState('')
 
   const code = searchParams.get('code')
-  const state = searchParams.get('state') // Contains tenantId
+  const state = searchParams.get('state') // Contains base64 JSON with tenantId, redirectUri, token
   const errorParam = searchParams.get('error')
+
+  // Parse state to extract tenantId and access token
+  let tenantId = ''
+  let accessToken = storedAccessToken
+  try {
+    const parsed = JSON.parse(atob(state || ''))
+    tenantId = parsed.tenantId || ''
+    if (parsed.token) {
+      try {
+        accessToken = atob(parsed.token)
+      } catch {
+        accessToken = parsed.token || storedAccessToken
+      }
+    }
+  } catch {
+    tenantId = state || ''
+  }
 
   useEffect(() => {
     if (errorParam) {
@@ -40,11 +57,11 @@ export const YouTubeCallback = () => {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${accessToken}`,
-          'X-Creator-ID': state || '319190e1-0791-43b0-bd04-506f959c1471'
+          'X-Creator-ID': tenantId || '319190e1-0791-43b0-bd04-506f959c1471'
         },
         body: JSON.stringify({
           code,
-          tenantId: state,
+          tenantId,
           // Zentrale Redirect-URI über viraltenant.com (für alle Tenants)
           redirectUri: `https://viraltenant.com/youtube-callback`
         })
